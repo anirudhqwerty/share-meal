@@ -4,7 +4,7 @@
     "slug": "share-meal",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/applogo.png",
     "scheme": "sharemeal",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -23,9 +23,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FF6B35",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/applogo.png",
+        "backgroundImage": "./assets/images/applogo.png",
+        "monochromeImage": "./assets/images/applogo.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -44,26 +44,20 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/applogo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/applogo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
       ],
       "@react-native-community/datetimepicker",
-      [
-        "react-native-maps/app.plugin.js",
-        {
-          "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
-        }
-      ],
       [
         "expo-location",
         {

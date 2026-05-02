@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  KeyboardAvoidingView, Platform, TouchableOpacity, Alert, ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Input } from '@/components/ui/Input';
@@ -11,14 +9,18 @@ import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { authService } from '@/services/auth.service';
 import { useLocation } from '@/hooks/useLocation';
 import { useAuth } from '@/context/AuthContext';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { LocationPreviewMap } from '@/components/LocationPreviewMap';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: 'donor' | 'ngo' }>();
+  const normalizedRole = role === 'donor' || role === 'ngo' ? role : null;
   const { refreshUser } = useAuth();
   const { location, address, loading: locLoading, refresh: refreshLoc } = useLocation();
 
-  const isDonor = role === 'donor';
+  const isDonor = normalizedRole === 'donor';
 
   // Shared
   const [phone, setPhone] = useState('');
@@ -43,7 +45,18 @@ export default function RegisterScreen() {
     }
   }, [address]);
 
+  React.useEffect(() => {
+    if (!normalizedRole) {
+      Alert.alert('Role required', 'Please choose Donor or NGO first.');
+      router.replace('/(auth)/welcome');
+    }
+  }, [normalizedRole, router]);
+
   const validate = () => {
+    if (!normalizedRole) {
+      setErrors({ role: 'Role is missing. Please reselect role.' });
+      return false;
+    }
     const e: Record<string, string> = {};
     if (isDonor) {
       if (!orgName.trim()) e.orgName = 'Organization name is required';
@@ -61,13 +74,31 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!validate()) return;
+    if (!normalizedRole) return;
     setLoading(true);
     try {
-      const organizationData = isDonor
-        ? { organization_name: orgName, address: orgAddress, latitude: location!.latitude, longitude: location!.longitude }
-        : { ngo_name: ngoName, registration_number: regNumber, address: ngoAddress, latitude: location!.latitude, longitude: location!.longitude, notification_radius_km: parseInt(radius) };
+      let organizationData: Record<string, any>;
+      if (normalizedRole === 'donor') {
+        organizationData = {
+          organization_name: orgName,
+          address: orgAddress,
+          latitude: location!.latitude,
+          longitude: location!.longitude,
+        };
+      } else if (normalizedRole === 'ngo') {
+        organizationData = {
+          ngo_name: ngoName,
+          registration_number: regNumber,
+          address: ngoAddress,
+          latitude: location!.latitude,
+          longitude: location!.longitude,
+          notification_radius_km: parseInt(radius, 10),
+        };
+      } else {
+        throw new Error('Invalid role selected. Please choose again.');
+      }
 
-      await authService.registerProfile({ role: role!, phone, organizationData });
+      await authService.registerProfile({ role: normalizedRole, phone, organizationData });
       await refreshUser();
     } catch (e: any) {
       Alert.alert('Registration Failed', e.message);
@@ -85,7 +116,8 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View style={styles.header}>
+          <Animated.View entering={FadeInDown.duration(350)} style={styles.header}>
+            <BrandLogo size={54} variant="contained" />
             <View style={[styles.roleChip, { backgroundColor: isDonor ? Colors.primaryLight : Colors.secondaryLight }]}>
               <Ionicons name={isDonor ? 'restaurant' : 'people'} size={15} color={isDonor ? Colors.primary : Colors.secondary} />
               <Text style={[styles.roleChipText, { color: isDonor ? Colors.primary : Colors.secondary }]}>
@@ -94,7 +126,7 @@ export default function RegisterScreen() {
             </View>
             <Text style={styles.title}>Set up your profile</Text>
             <Text style={styles.subtitle}>Just a few details to get you started</Text>
-          </View>
+          </Animated.View>
 
           {/* Shared */}
           <Input
@@ -188,6 +220,12 @@ export default function RegisterScreen() {
               )}
             </View>
           </View>
+          <LocationPreviewMap
+            latitude={location?.latitude}
+            longitude={location?.longitude}
+            title="Detected Location"
+            height={180}
+          />
 
           <Button
             title="Complete Registration"
@@ -207,7 +245,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
   kav: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 50 },
-  header: { marginBottom: Spacing.xl },
+  header: { marginBottom: Spacing.xl, gap: 10 },
   roleChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5,

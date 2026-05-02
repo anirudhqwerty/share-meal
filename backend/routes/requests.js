@@ -48,7 +48,7 @@ router.get('/mine', async (req, res) => {
 
   const { data, error } = await supabase
     .from('pickup_requests')
-    .select(`*, food_donations(food_type, quantity, expiry_time, status, image_path, donors(organization_name, address))`)
+    .select(`*, food_donations(food_type, quantity, expiry_time, status, image_path, latitude, longitude, donors(organization_name, address, latitude, longitude))`)
     .eq('ngo_id', req.user.id)
     .order('request_time', { ascending: false });
 

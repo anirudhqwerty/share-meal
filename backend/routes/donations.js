@@ -6,14 +6,14 @@ const { supabase } = require('../lib/supabase');
 router.post('/', async (req, res) => {
   if (req.userRole !== 'donor') return res.status(403).json({ error: 'Donors only' });
 
-  const { food_type, quantity, image_path, latitude, longitude, expiry_time } = req.body;
+  const { food_type, quantity, address, image_path, latitude, longitude, expiry_time } = req.body;
   if (!food_type || !quantity || !latitude || !longitude || !expiry_time) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   const { data, error } = await supabase
     .from('food_donations')
-    .insert({ donor_id: req.user.id, food_type, quantity, image_path, latitude, longitude, expiry_time })
+    .insert({ donor_id: req.user.id, food_type, quantity, address, image_path, latitude, longitude, expiry_time })
     .select()
     .single();
 
@@ -64,7 +64,7 @@ router.get('/:id', async (req, res) => {
 
   const { data: requests } = await supabase
     .from('pickup_requests')
-    .select(`*, ngos(ngo_name, address, registration_number)`)
+    .select(`*, ngos(ngo_name, address, registration_number, latitude, longitude)`)
     .eq('donation_id', req.params.id)
     .order('request_time', { ascending: true });
 

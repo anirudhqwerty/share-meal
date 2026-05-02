@@ -2,15 +2,14 @@ import { supabase } from '@/lib/supabase';
 import api from './api';
 
 export const authService = {
-  // Step 1 — send OTP
-  async sendOtp(email: string) {
-    const { error } = await supabase.auth.signInWithOtp({ email });
+  async signUpWithPassword(email: string, password: string) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw new Error(error.message);
+    return data;
   },
 
-  // Step 2 — verify OTP, returns session
-  async verifyOtp(email: string, token: string) {
-    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+  async signInWithPassword(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
     return data;
   },

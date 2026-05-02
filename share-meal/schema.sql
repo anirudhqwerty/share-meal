@@ -20,7 +20,7 @@ CREATE TABLE app_users (
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
     expo_push_token VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 /* Creates the donors table, demonstrating a 1:1 relationship with app_users, storing hotel/restaurant specifics. */
@@ -50,15 +50,16 @@ CREATE TABLE ngos (
 CREATE TABLE food_donations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     donor_id UUID NOT NULL REFERENCES donors(user_id) ON DELETE CASCADE,
-    food_type TEXT NOT NULL, -- Flexible entry: e.g., "Veg Biryani", "Bread", "Cooked Rice"
+    food_type TEXT NOT NULL, 
     quantity VARCHAR(100) NOT NULL,
+    address TEXT,
     image_path VARCHAR(255),
     latitude DECIMAL(10, 8) NOT NULL,
     longitude DECIMAL(11, 8) NOT NULL,
     location GEOGRAPHY(POINT, 4326),
-    expiry_time TIMESTAMP NOT NULL,
+    expiry_time TIMESTAMPTZ NOT NULL,
     status donation_status DEFAULT 'available',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 /* Creates the pickup requests table, allowing multiple NGOs to request the same available food before approval. */
@@ -67,7 +68,7 @@ CREATE TABLE pickup_requests (
     donation_id UUID NOT NULL REFERENCES food_donations(id) ON DELETE CASCADE,
     ngo_id UUID NOT NULL REFERENCES ngos(user_id) ON DELETE CASCADE,
     status request_status DEFAULT 'pending',
-    request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    request_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_ngo_request UNIQUE (donation_id, ngo_id)
 );
 
@@ -75,9 +76,9 @@ CREATE TABLE pickup_requests (
 CREATE TABLE pickups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     request_id UUID NOT NULL UNIQUE REFERENCES pickup_requests(id) ON DELETE CASCADE,
-    scheduled_time TIMESTAMP,
+    scheduled_time TIMESTAMPTZ,
     status pickup_status DEFAULT 'scheduled',
-    completed_at TIMESTAMP
+    completed_at TIMESTAMPTZ
 );
 
 /* Creates a centralized notifications table to store the history of system alerts for all users. */
@@ -87,7 +88,7 @@ CREATE TABLE notifications (
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 /* Creates a PL/pgSQL function to convert latitude and longitude coordinates into PostGIS geography points. */
@@ -112,4 +113,53 @@ FOR EACH ROW EXECUTE FUNCTION sync_geography_location();
 /* Attaches the spatial conversion trigger to the food_donations table. */
 CREATE TRIGGER update_donation_location
 BEFORE INSERT OR UPDATE OF latitude, longitude ON food_donations
-FOR EACH ROW EXECUTE FUNCTION sync_geography_location();
+FOR EACH ROW EXECUTE FUNCTION sync_geography_location();
+
+/* Function for NGOs to find nearby food within a radius (default 5km). */
+CREATE OR REPLACE FUNCTION get_nearby_donations(p_lat FLOAT, p_lng FLOAT, p_radius_km FLOAT DEFAULT 5)
+RETURNS TABLE (
+    id UUID,
+    food_type TEXT,
+    quantity VARCHAR,
+    address TEXT,
+    image_path VARCHAR,
+    latitude DECIMAL,
+    longitude DECIMAL,
+    expiry_time TIMESTAMPTZ,
+    status donation_status,
+    created_at TIMESTAMPTZ,
+    distance_km FLOAT,
+    organization_name VARCHAR
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        fd.id, fd.food_type, fd.quantity, fd.address, fd.image_path,
+        fd.latitude, fd.longitude, fd.expiry_time, fd.status, fd.created_at,
+        (ST_Distance(fd.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography) / 1000)::FLOAT as distance_km,
+        d.organization_name
+    FROM food_donations fd
+    JOIN donors d ON fd.donor_id = d.user_id
+    WHERE fd.status = 'available'
+      AND ST_DWithin(fd.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, p_radius_km * 1000)
+    ORDER BY distance_km ASC;
+END;
+$$ LANGUAGE plpgsql;
+
+/* Function to find NGOs within a default 5km radius for notifications. */
+CREATE OR REPLACE FUNCTION get_nearby_ngos(p_lat FLOAT, p_lng FLOAT)
+RETURNS TABLE (
+    user_id UUID,
+    ngo_name VARCHAR,
+    distance_km FLOAT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        n.user_id, n.ngo_name,
+        (ST_Distance(n.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography) / 1000)::FLOAT as distance_km
+    FROM ngos n
+    WHERE ST_DWithin(n.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, n.notification_radius_km * 1000)
+    ORDER BY distance_km ASC;
+END;
+$$ LANGUAGE plpgsql;

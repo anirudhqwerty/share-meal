@@ -20,7 +20,11 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const msg = err.response?.data?.error || err.message || 'Network error';
+    const rawError = err.response?.data?.error;
+    const msg =
+      typeof rawError === 'string'
+        ? rawError
+        : rawError?.message || err.message || 'Network error';
     return Promise.reject(new Error(msg));
   }
 );

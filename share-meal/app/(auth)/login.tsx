@@ -1,59 +1,80 @@
-import React, { useState, useRef } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  KeyboardAvoidingView, Platform, TouchableOpacity, Alert,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 import { authService } from '@/services/auth.service';
 
-type Step = 'email' | 'otp';
-
 export default function LoginScreen() {
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: 'donor' | 'ngo' }>();
-  const [step, setStep] = useState<Step>('email');
+  const normalizedRole = role === 'donor' || role === 'ngo' ? role : null;
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
-  const [otpError, setOtpError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
-  const isNgo = role === 'ngo';
+  const isNgo = normalizedRole === 'ngo';
 
-  const handleSendOtp = async () => {
+  const clearErrors = () => {
     setEmailError('');
-    if (!email || !/\S+@\S+\.\S+/.test(email)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    setLoading(true);
-    try {
-      await authService.sendOtp(email);
-      setStep('otp');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setLoading(false);
-    }
+    setPasswordError('');
   };
 
-  const handleVerifyOtp = async () => {
-    setOtpError('');
-    if (!otp || otp.length < 6) {
-      setOtpError('Enter the 6-digit code sent to your email');
+  const validate = () => {
+    clearErrors();
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    if (!password || password.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return false;
+    }
+    if (mode === 'register' && password !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return false;
+    }
+    return true;
+  };
+
+  const handleContinue = async () => {
+    if (!normalizedRole) {
+      Alert.alert('Role required', 'Please choose your role first.');
+      router.replace('/(auth)/welcome');
       return;
     }
+    if (!validate()) return;
     setLoading(true);
     try {
-      await authService.verifyOtp(email, otp);
-      // Navigate to register profile — pass role
-      router.replace({ pathname: '/(auth)/register', params: { role } });
+      if (mode === 'register') {
+        const signUpRes = await authService.signUpWithPassword(email.trim().toLowerCase(), password);
+        if (!signUpRes.session) {
+          Alert.alert(
+            'Email confirmation enabled',
+            'Your Supabase project is requiring email confirmation, so no access token is created yet. Disable email confirmations in Supabase Auth settings, or confirm the email first, then login.'
+          );
+          return;
+        }
+        // Brand-new signup — always needs to complete profile
+        router.replace({ pathname: '/(auth)/register', params: { role: normalizedRole } });
+      } else {
+        const signInRes = await authService.signInWithPassword(email.trim().toLowerCase(), password);
+        if (!signInRes.session) {
+          Alert.alert('Login failed', 'No active session received from Supabase.');
+          return;
+        }
+        // AuthGuard will route to the right dashboard (or register) once loadUser completes.
+      }
     } catch (e: any) {
-      setOtpError('Invalid code. Please try again.');
+      Alert.alert(mode === 'register' ? 'Registration Failed' : 'Login Failed', e.message);
     } finally {
       setLoading(false);
     }
@@ -75,78 +96,82 @@ export default function LoginScreen() {
             <Ionicons name="arrow-back" size={22} color={Colors.text} />
           </TouchableOpacity>
 
-          <View style={[styles.rolePill, { backgroundColor: isNgo ? Colors.secondaryLight : Colors.primaryLight }]}>
+          <Animated.View entering={FadeInDown.duration(350)} style={[styles.rolePill, { backgroundColor: isNgo ? Colors.secondaryLight : Colors.primaryLight }]}>
             <Ionicons
               name={isNgo ? 'people' : 'restaurant'}
               size={16}
               color={isNgo ? Colors.secondary : Colors.primary}
             />
             <Text style={[styles.roleLabel, { color: isNgo ? Colors.secondary : Colors.primary }]}>
-              {isNgo ? 'NGO Login' : 'Donor Login'}
+              {isNgo ? 'NGO Account' : 'Donor Account'}
             </Text>
+          </Animated.View>
+
+          <View style={styles.switcher}>
+            <TouchableOpacity
+              onPress={() => setMode('login')}
+              style={[styles.switchBtn, mode === 'login' && styles.switchBtnActive]}
+            >
+              <Text style={[styles.switchText, mode === 'login' && styles.switchTextActive]}>Login</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setMode('register')}
+              style={[styles.switchBtn, mode === 'register' && styles.switchBtnActive]}
+            >
+              <Text style={[styles.switchText, mode === 'register' && styles.switchTextActive]}>Create Account</Text>
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.title}>
-            {step === 'email' ? 'Welcome back 👋' : 'Check your inbox 📬'}
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </Text>
           <Text style={styles.subtitle}>
-            {step === 'email'
-              ? 'Enter your email to receive a one-time login code'
-              : `We've sent a 6-digit code to\n${email}`}
+            {mode === 'login'
+              ? 'Sign in with email and password to continue.'
+              : 'Register with email/password first, then complete your role profile.'}
           </Text>
 
-          {step === 'email' ? (
-            <>
-              <Input
-                label="Email Address"
-                leftIcon="mail-outline"
-                placeholder="you@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-                error={emailError}
-                returnKeyType="done"
-                onSubmitEditing={handleSendOtp}
-              />
-              <Button
-                title="Send Login Code"
-                onPress={handleSendOtp}
-                loading={loading}
-                fullWidth
-                size="lg"
-                style={styles.btn}
-              />
-            </>
-          ) : (
-            <>
-              <Input
-                label="Verification Code"
-                leftIcon="keypad-outline"
-                placeholder="123456"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={setOtp}
-                error={otpError}
-                returnKeyType="done"
-                onSubmitEditing={handleVerifyOtp}
-              />
-              <Button
-                title="Verify & Continue"
-                onPress={handleVerifyOtp}
-                loading={loading}
-                fullWidth
-                size="lg"
-                style={styles.btn}
-              />
-              <TouchableOpacity onPress={handleSendOtp} style={styles.resend}>
-                <Text style={styles.resendText}>
-                  Didn't receive it? <Text style={styles.resendLink}>Resend code</Text>
-                </Text>
-              </TouchableOpacity>
-            </>
+          <Input
+            label="Email Address"
+            leftIcon="mail-outline"
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+            error={emailError}
+            returnKeyType="next"
+          />
+          <Input
+            label="Password"
+            leftIcon="lock-closed-outline"
+            placeholder="Minimum 6 characters"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            error={passwordError}
+            returnKeyType={mode === 'register' ? 'next' : 'done'}
+          />
+          {mode === 'register' && (
+            <Input
+              label="Confirm Password"
+              leftIcon="shield-checkmark-outline"
+              placeholder="Re-enter password"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleContinue}
+            />
           )}
+          <Button
+            title={mode === 'login' ? 'Login & Continue' : 'Register & Continue'}
+            onPress={handleContinue}
+            loading={loading}
+            fullWidth
+            size="lg"
+            style={styles.btn}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -167,11 +192,26 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: Radius.full, marginBottom: 16,
   },
+  switcher: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: 4,
+    marginBottom: 22,
+  },
+  switchBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+  },
+  switchBtnActive: {
+    backgroundColor: Colors.white,
+  },
+  switchText: { ...Typography.body, color: Colors.textSecondary, fontWeight: '600' },
+  switchTextActive: { color: Colors.text },
   roleLabel: { ...Typography.label, fontSize: 13 },
   title: { ...Typography.h1, color: Colors.text, marginBottom: 8 },
   subtitle: { ...Typography.bodyLg, color: Colors.textSecondary, marginBottom: 32, lineHeight: 24 },
   btn: { marginTop: 8 },
-  resend: { alignItems: 'center', marginTop: 20 },
-  resendText: { ...Typography.body, color: Colors.textSecondary },
-  resendLink: { color: Colors.primary, fontWeight: '600' },
 });

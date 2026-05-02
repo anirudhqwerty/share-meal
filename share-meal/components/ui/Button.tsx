@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Colors, Radius, Shadow, Typography } from '@/constants/theme';
 
 interface ButtonProps {
@@ -19,30 +20,39 @@ export function Button({
   loading, disabled, style, textStyle, fullWidth = false,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const onPressIn = () => { scale.value = withSpring(0.98); };
+  const onPressOut = () => { scale.value = withSpring(1); };
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.82}
-      disabled={isDisabled}
-      style={[
-        styles.base,
-        styles[`size_${size}`],
-        styles[`variant_${variant}`],
-        fullWidth && { width: '100%' },
-        isDisabled && styles.disabled,
-        variant === 'primary' && Shadow.lg,
-        style,
-      ]}
-    >
-      {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? Colors.white : Colors.primary} size="small" />
-      ) : (
-        <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`], textStyle]}>
-          {title}
-        </Text>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={animatedStyle}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        activeOpacity={0.9}
+        disabled={isDisabled}
+        style={[
+          styles.base,
+          styles[`size_${size}`],
+          styles[`variant_${variant}`],
+          fullWidth && { width: '100%' },
+          isDisabled && styles.disabled,
+          variant === 'primary' && Shadow.lg,
+          style,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color={variant === 'primary' ? Colors.white : Colors.primary} size="small" />
+        ) : (
+          <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`], textStyle]}>
+            {title}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -61,7 +71,7 @@ const styles = StyleSheet.create({
 
   disabled: { opacity: 0.45 },
 
-  text: { fontWeight: '600' },
+  text: { ...Typography.body, fontWeight: '700' },
   text_primary: { color: Colors.white },
   text_secondary: { color: Colors.secondary },
   text_outline: { color: Colors.primary },

@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { formatDateTime } from '@/utils/time';
 
 interface Notification {
   id: string;
@@ -12,11 +14,10 @@ interface Notification {
 }
 
 export function NotificationItem({ item, onPress }: { item: Notification; onPress: () => void }) {
-  const time = new Date(item.created_at).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-  });
+  const time = formatDateTime(item.created_at);
 
   return (
+    <Animated.View entering={FadeInDown.duration(240)}>
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
@@ -32,6 +33,7 @@ export function NotificationItem({ item, onPress }: { item: Notification; onPres
       </View>
       {!item.is_read && <View style={styles.dot} />}
     </TouchableOpacity>
+    </Animated.View>
   );
 }
 

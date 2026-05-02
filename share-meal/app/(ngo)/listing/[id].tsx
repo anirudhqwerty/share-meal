@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  Image, TouchableOpacity, Alert,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { donationsService } from '@/services/donations.service';
 import { requestsService } from '@/services/requests.service';
@@ -11,18 +9,14 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Colors, Spacing, Radius, Shadow, Typography } from '@/constants/theme';
-
-function timeLeft(expiry: string) {
-  const diff = new Date(expiry).getTime() - Date.now();
-  if (diff <= 0) return { text: 'Expired', urgent: true };
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  return { text: h > 0 ? `${h}h ${m}m left` : `${m}m left`, urgent: h < 1 };
-}
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { LocationPreviewMap } from '@/components/LocationPreviewMap';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatTimeLeft, formatDate } from '@/utils/time';
 
 export default function NgoListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [data, setData] = useState<{ donation: any; requests: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -63,25 +57,21 @@ export default function NgoListingDetailScreen() {
 
   if (loading || !data) return <LoadingSpinner text="Loading listing…" />;
   const { donation } = data;
-  const expiry = timeLeft(donation.expiry_time);
+  const expiry = formatTimeLeft(donation.expiry_time);
   const isAvailable = donation.status === 'available';
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Top bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.screenTitle}>Food Listing</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <ScreenHeader title="Food listing" showBack />
 
         {donation.image_path ? (
           <Image source={{ uri: donation.image_path }} style={styles.heroImage} />
         ) : (
-          <View style={styles.heroFallback}><Text style={{ fontSize: 64 }}>🍲</Text></View>
+          <View style={styles.heroFallback}>
+            <Ionicons name="nutrition-outline" size={64} color={Colors.primary} />
+          </View>
         )}
 
         {/* Status row */}
@@ -105,14 +95,19 @@ export default function NgoListingDetailScreen() {
             <Text style={styles.donorAddress} numberOfLines={2}>{donation.donors?.address}</Text>
           </View>
         </View>
+        <LocationPreviewMap
+          latitude={donation.latitude}
+          longitude={donation.longitude}
+          title="Pickup location"
+        />
 
         {/* Details grid */}
         <View style={styles.detailsGrid}>
           {[
             { icon: 'layers-outline', label: 'Quantity', val: donation.quantity },
-            { icon: 'location-outline', label: 'Distance', val: donation.distance_km ? `${donation.distance_km} km` : 'N/A' },
-            { icon: 'time-outline', label: 'Time Left', val: expiry.text, urgent: expiry.urgent },
-            { icon: 'calendar-outline', label: 'Posted', val: new Date(donation.created_at).toLocaleDateString('en-IN') },
+            { icon: 'navigate-outline', label: 'Distance', val: typeof donation.distance_km === 'number' ? `${donation.distance_km.toFixed(1)} km` : 'N/A' },
+            { icon: 'time-outline', label: 'Time left', val: expiry.text, urgent: expiry.urgent },
+            { icon: 'calendar-outline', label: 'Posted', val: formatDate(donation.created_at, { day: '2-digit', month: 'short' }) },
           ].map((item) => (
             <View key={item.label} style={[styles.detailCard, Shadow.sm]}>
               <Ionicons name={item.icon as any} size={18} color={item.urgent ? Colors.error : Colors.primary} />
@@ -124,20 +119,21 @@ export default function NgoListingDetailScreen() {
       </ScrollView>
 
       {/* CTA Footer */}
-      <View style={[styles.footer, Shadow.md]}>
+      <View style={[styles.footer, Shadow.md, { paddingBottom: insets.bottom + 12 }]}>
         {hasRequested || !isAvailable ? (
           <View style={styles.alreadyReq}>
             <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
             <Text style={styles.alreadyText}>
-              {hasRequested ? 'Request Sent! Awaiting donor approval.' : `This food is ${donation.status}.`}
+              {hasRequested ? 'Request sent! Awaiting donor approval.' : `This food is ${donation.status}.`}
             </Text>
           </View>
         ) : (
           <Button
-            title="Request Pickup"
+            title="Request pickup"
             onPress={handleRequest}
             loading={requesting}
-            fullWidth size="lg"
+            fullWidth
+            size="lg"
           />
         )}
       </View>
@@ -148,9 +144,6 @@ export default function NgoListingDetailScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
   scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Spacing.md },
-  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  screenTitle: { ...Typography.h3, color: Colors.text },
   heroImage: { width: '100%', height: 220, borderRadius: Radius.xl, marginBottom: Spacing.md },
   heroFallback: { height: 180, backgroundColor: Colors.primaryLight, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },

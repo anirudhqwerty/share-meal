@@ -2,24 +2,45 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function TabIcon({ name, label, focused }: { name: any; label: string; focused: boolean }) {
+function TabIcon({
+  name,
+  label,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  label: string;
+  focused: boolean;
+}) {
+  const iconName = focused ? name : (`${name}-outline` as keyof typeof Ionicons.glyphMap);
   return (
     <View style={styles.tabItem}>
-      <Ionicons name={focused ? name : `${name}-outline`} size={22} color={focused ? Colors.primary : Colors.textMuted} />
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+      <Ionicons name={iconName} size={22} color={focused ? Colors.primary : Colors.textMuted} />
+      <Text
+        style={[styles.tabLabel, focused && styles.tabLabelActive]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {label}
+      </Text>
     </View>
   );
 }
 
 export default function DonorLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          { height: 64 + insets.bottom, paddingBottom: Math.max(8, insets.bottom) },
+        ],
         tabBarShowLabel: false,
         tabBarActiveTintColor: Colors.primary,
+        tabBarItemStyle: styles.tabItemWrap,
       }}
     >
       <Tabs.Screen
@@ -44,11 +65,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    height: 72,
-    paddingBottom: 10,
     paddingTop: 8,
   },
-  tabItem: { alignItems: 'center', gap: 3 },
-  tabLabel: { fontSize: 11, color: Colors.textMuted },
-  tabLabelActive: { color: Colors.primary, fontWeight: '600' },
+  tabItemWrap: { paddingHorizontal: 4 },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    minWidth: 70,
+    paddingHorizontal: 4,
+  },
+  tabLabel: {
+    fontSize: 10.5,
+    color: Colors.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  tabLabelActive: { color: Colors.primary, fontWeight: '700' },
 });

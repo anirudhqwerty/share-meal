@@ -14,6 +14,9 @@ router.post('/register', authenticateToken, async (req, res) => {
   }
 
   try {
+    if (!organizationData || typeof organizationData !== 'object') {
+      return res.status(400).json({ error: 'organizationData is required' });
+    }
     // Upsert into app_users
     const { error: userError } = await supabase
       .from('app_users')
@@ -38,7 +41,8 @@ router.post('/register', authenticateToken, async (req, res) => {
 
     res.json({ success: true, userId, role });
   } catch (err) {
-    res.status(500).json({ error: 'Server error during registration' });
+    const message = err?.message || 'Server error during registration';
+    res.status(500).json({ error: message });
   }
 });
 
@@ -52,15 +56,18 @@ router.get('/me', authenticateToken, async (req, res) => {
     .eq('id', userId)
     .single();
 
-  if (error) return res.status(404).json({ error: 'User not found' });
+  // No app_users row yet → user hasn't finished registration. Tell client so it routes to /register.
+  if (error || !appUser) {
+    return res.status(404).json({ error: 'Profile not created yet' });
+  }
 
   let profile = null;
   if (appUser.role === 'donor') {
-    const { data } = await supabase.from('donors').select('*').eq('user_id', userId).single();
-    profile = data;
-  } else {
-    const { data } = await supabase.from('ngos').select('*').eq('user_id', userId).single();
-    profile = data;
+    const { data } = await supabase.from('donors').select('*').eq('user_id', userId).maybeSingle();
+    profile = data || null;
+  } else if (appUser.role === 'ngo') {
+    const { data } = await supabase.from('ngos').select('*').eq('user_id', userId).maybeSingle();
+    profile = data || null;
   }
 
   res.json({ user: appUser, profile });

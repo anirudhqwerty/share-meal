@@ -2,25 +2,28 @@
 export const Colors = {
   // Brand
   primary: '#FF6B35',
-  primaryLight: '#FFF0EB',
-  primaryDark: '#E05528',
-
-  secondary: '#00C896',
-  secondaryLight: '#E6FBF5',
+  primaryLight: '#FFF1EC',
+  primaryDark: '#D94E21',
+  primarySoft: '#FFE5DB',
+  accent: '#5A8CFF',
+  accentLight: '#EEF3FF',
+  secondary: '#13B886',
+  secondaryLight: '#EAFBF5',
 
   // Backgrounds
-  background: '#FAFAFA',
+  background: '#F7F8FC',
   card: '#FFFFFF',
-  surface: '#F5F7FA',
+  surface: '#F1F4F9',
+  input: '#F6F7FB',
 
   // Text
-  text: '#1A1A2E',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
+  text: '#171A22',
+  textSecondary: '#5D6473',
+  textMuted: '#8D95A5',
 
   // Borders
-  border: '#E5E7EB',
-  divider: '#F3F4F6',
+  border: '#E4E8F0',
+  divider: '#EEF1F6',
 
   // Semantic
   success: '#10B981',
@@ -49,12 +52,16 @@ export const Colors = {
   white: '#FFFFFF',
   black: '#000000',
   overlay: 'rgba(0,0,0,0.45)',
+  gradientWarm: ['#FF6B35', '#FF8B5B'] as const,
+  gradientSoft: ['#FFF3EE', '#FFFFFF'] as const,
 };
 
 export const Spacing = {
   xs: 4,
   sm: 8,
+  mdSm: 12,
   md: 16,
+  lgMd: 20,
   lg: 24,
   xl: 32,
   xxl: 48,
@@ -102,4 +109,10 @@ export const Typography = {
   bodyLg: { fontSize: 16, fontWeight: '400' as const, lineHeight: 24 },
   caption: { fontSize: 12, fontWeight: '400' as const },
   label: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.5 },
+};
+
+export const Motion = {
+  fast: 160,
+  normal: 260,
+  slow: 380,
 };

@@ -32,7 +32,15 @@ export function Badge({ status, size = 'md' }: BadgeProps) {
 }
 
 const styles = StyleSheet.create({
-  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.full },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+  },
   sm: { paddingHorizontal: 8, paddingVertical: 3 },
   dot: { width: 6, height: 6, borderRadius: 3, marginRight: 5 },
   text: { ...Typography.label, fontSize: 12 },

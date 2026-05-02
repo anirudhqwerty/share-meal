@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TouchableOpacity, TextInputProps, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Typography } from '@/constants/theme';
+import { Colors, Radius, Shadow, Typography } from '@/constants/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -58,14 +58,15 @@ export function Input({
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: 16 },
-  label: { ...Typography.label, color: Colors.text, marginBottom: 6 },
+  label: { ...Typography.label, color: Colors.text, marginBottom: 8 },
   inputRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.input,
+    borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.border,
     paddingHorizontal: 14, minHeight: 50,
+    ...Shadow.sm,
   },
-  focused: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  focused: { borderColor: Colors.primary, backgroundColor: Colors.white },
   errorBorder: { borderColor: Colors.error },
   leftIcon: { marginRight: 10 },
   rightIcon: { marginLeft: 10, padding: 2 },
