@@ -1,7 +1,7 @@
 -- If you already ran 001 with `AND fd.expiry_time > NOW()` in get_nearby_donations,
--- that extra filter can hide every row after a bad timestamp migration. The app
--- already shows "time left" in the UI — we only need `status = 'available'`
--- and the distance filter here.
+-- that extra filter can hide rows after a bad timestamp migration. The app
+-- checks expiry in the UI and request endpoint, so include both requestable
+-- listing states and the distance filter here.
 --
 -- Run in Supabase SQL editor.
 
@@ -31,7 +31,7 @@ BEGIN
         d.organization_name
     FROM food_donations fd
     JOIN donors d ON fd.donor_id = d.user_id
-    WHERE fd.status = 'available'
+    WHERE fd.status IN ('available', 'pending')
       AND ST_DWithin(fd.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, p_radius_km * 1000)
     ORDER BY distance_km ASC;
 END;

@@ -10,8 +10,15 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('food_images', 'food_images', true)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Uploads" ON storage.objects;
 CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'food_images');
-CREATE POLICY "Authenticated Uploads" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'food_images' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated Uploads" ON storage.objects FOR INSERT
+WITH CHECK (
+    bucket_id = 'food_images'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = auth.uid()::TEXT
+);
 
 /* Creates the base users table to link with Supabase Auth and store common connection data. */
 CREATE TABLE app_users (
@@ -140,7 +147,7 @@ BEGIN
         d.organization_name
     FROM food_donations fd
     JOIN donors d ON fd.donor_id = d.user_id
-    WHERE fd.status = 'available'
+    WHERE fd.status IN ('available', 'pending')
       AND ST_DWithin(fd.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, p_radius_km * 1000)
     ORDER BY distance_km ASC;
 END;
@@ -151,15 +158,14 @@ CREATE OR REPLACE FUNCTION get_nearby_ngos(p_lat FLOAT, p_lng FLOAT)
 RETURNS TABLE (
     user_id UUID,
     ngo_name VARCHAR,
-    distance_km FLOAT
+    expo_push_token VARCHAR
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
-        n.user_id, n.ngo_name,
-        (ST_Distance(n.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography) / 1000)::FLOAT as distance_km
+    SELECT n.user_id, n.ngo_name, u.expo_push_token
     FROM ngos n
+    JOIN app_users u ON u.id = n.user_id
     WHERE ST_DWithin(n.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, n.notification_radius_km * 1000)
-    ORDER BY distance_km ASC;
+    ORDER BY ST_Distance(n.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography) ASC;
 END;
 $$ LANGUAGE plpgsql;

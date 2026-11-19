@@ -1,6 +1,5 @@
 -- Migration 001 — Move timezone-naive TIMESTAMP columns to TIMESTAMPTZ.
--- Run this in the Supabase SQL editor. Idempotent-safe: re-running after
--- migration will error harmlessly on "already TIMESTAMPTZ" — that's expected.
+-- Run this in the Supabase SQL editor. The type check makes repeat runs safe.
 --
 -- WHY: the app stores UTC ISO strings (…Z). TIMESTAMP (without tz) strips
 -- the offset and causes client-side `new Date(str)` to interpret the value
@@ -9,27 +8,36 @@
 
 BEGIN;
 
--- Users
-ALTER TABLE app_users
-  ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
-
--- Donations
-ALTER TABLE food_donations
-  ALTER COLUMN expiry_time TYPE TIMESTAMPTZ USING expiry_time AT TIME ZONE 'UTC',
-  ALTER COLUMN created_at  TYPE TIMESTAMPTZ USING created_at  AT TIME ZONE 'UTC';
-
--- Pickup requests
-ALTER TABLE pickup_requests
-  ALTER COLUMN request_time TYPE TIMESTAMPTZ USING request_time AT TIME ZONE 'UTC';
-
--- Pickups
-ALTER TABLE pickups
-  ALTER COLUMN scheduled_time TYPE TIMESTAMPTZ USING scheduled_time AT TIME ZONE 'UTC',
-  ALTER COLUMN completed_at   TYPE TIMESTAMPTZ USING completed_at   AT TIME ZONE 'UTC';
-
--- Notifications
-ALTER TABLE notifications
-  ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
+DO $$
+DECLARE
+  column_to_migrate RECORD;
+BEGIN
+  FOR column_to_migrate IN
+    SELECT expected.table_name, expected.column_name
+    FROM (VALUES
+      ('app_users', 'created_at'),
+      ('food_donations', 'expiry_time'),
+      ('food_donations', 'created_at'),
+      ('pickup_requests', 'request_time'),
+      ('pickups', 'scheduled_time'),
+      ('pickups', 'completed_at'),
+      ('notifications', 'created_at')
+    ) AS expected(table_name, column_name)
+    JOIN information_schema.columns actual
+      ON actual.table_schema = 'public'
+     AND actual.table_name = expected.table_name
+     AND actual.column_name = expected.column_name
+     AND actual.data_type = 'timestamp without time zone'
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE public.%I ALTER COLUMN %I TYPE TIMESTAMPTZ USING %I AT TIME ZONE %L',
+      column_to_migrate.table_name,
+      column_to_migrate.column_name,
+      column_to_migrate.column_name,
+      'UTC'
+    );
+  END LOOP;
+END $$;
 
 -- Recreate the geo-search function so its return types match the new column types.
 DROP FUNCTION IF EXISTS get_nearby_donations(FLOAT, FLOAT, FLOAT);
@@ -57,7 +65,7 @@ BEGIN
         d.organization_name
     FROM food_donations fd
     JOIN donors d ON fd.donor_id = d.user_id
-    WHERE fd.status = 'available'
+    WHERE fd.status IN ('available', 'pending')
       AND ST_DWithin(fd.location, ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography, p_radius_km * 1000)
     ORDER BY distance_km ASC;
 END;
