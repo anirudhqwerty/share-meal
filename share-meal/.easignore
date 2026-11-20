@@ -1,0 +1,30 @@
+# Keep local credentials and generated artifacts out of the build upload.
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+google-services.json
+*service-account*.json
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*.local
+.env
+*.tsbuildinfo
+app-example
+/ios
+/android
+
+# Firebase app configuration is required by EAS, but stays out of Git.
+!google-services.json

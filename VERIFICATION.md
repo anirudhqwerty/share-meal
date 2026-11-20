@@ -13,7 +13,7 @@
 
 ## Evidence
 
-- Backend: `npm test`, 28 passing regressions. Tests cover API validation and role gates, workflow rollback, duplicate requests, competing approvals, expiry, ownership, cancellation, notification persistence, delivery failures, and invalid-token cleanup.
+- Backend: `npm test`, 29 passing regressions. Tests cover API validation and role gates, workflow rollback, duplicate requests, competing approvals, expiry, ownership, cancellation, notification persistence, delivery failures, invalid-token cleanup, and recovery without a worker.
 - Backend: `npm audit --omit=dev`, zero vulnerabilities.
 - Frontend: `npm run typecheck` and `npm run lint`, passing without warnings.
 - Android, iOS, and web production exports passed together with `--platform all`. These are JavaScript/assets exports, not signed native application builds.
@@ -48,7 +48,7 @@ This records evidence and limits, not a certification that every possible state 
 
 ## Remaining release work
 
-1. Deploy the task branch's API and ship/rebuild the frontend together. The configured production API is still the older deployment. In particular, the new radius-preferences endpoint and pickup relations need the new API. Database notification triggers deliberately preserve compatibility with legacy API writes until that release.
+1. Backend deployed to https://share-meal-six.vercel.app on 2026-11-20, deployment `dpl_HrVkMUKvff7ZqafixPH8tZb59LEi`, runtime source commit `498c3a6`. Public health check and the live integration suite passed against this production URL, including the new radius-preferences endpoint and pickup relations. Temporary verification accounts were removed afterward. The frontend still needs an Android build for remote push.
 2. EAS project `@anirudhqwerty1/share-meal` is linked, and development/preview/production profiles exist. Android FCM credentials and an Android development/production build still need setup. Push is now Android-only; APNs is not required. Remote push cannot be proven in Expo Go; no signed build or app-store release was started.
 3. No recurring worker is required. Mutation requests await the direct push attempt; later requests recover interrupted claims and retry pending/failed messages. Receipt polling was removed at the user's request to keep the system simple.
 4. The SDK 54 frontend production dependency audit reports 21 upstream findings: 17 moderate and 4 high, including `decode-uri-component`, `query-string`, `expo-router`, and `image-size`. Safe compatible updates and a patched PostCSS override were applied. A global image-size override broke Metro and was removed. No forced incompatible Expo SDK upgrade was made.

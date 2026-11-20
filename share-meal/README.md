@@ -82,7 +82,7 @@ The app is linked to `@anirudhqwerty1/share-meal` in EAS. `eas.json` defines dev
 For Android Firebase setup:
 
 1. Register the Android app in Firebase with package `com.anirudh.sharemeal`.
-2. Put its `google-services.json` in this app folder, beside `app.json`. The dynamic config uses it automatically when present. `GOOGLE_SERVICES_FILE` can override the path.
+2. Put its `google-services.json` in this app folder, beside `app.json`. The dynamic config uses it automatically when present, and `.easignore` includes it in the EAS build upload while keeping it out of Git. `GOOGLE_SERVICES_JSON` (EAS file variable) or `GOOGLE_SERVICES_FILE` can override the path.
 3. Upload the Firebase service-account JSON for FCM v1 to the linked EAS project's Android push credentials using `eas credentials --platform android`. This private key is separate from `google-services.json`; do not put it in the mobile bundle or Git.
 4. Build and install an Android development/preview app, allow notifications, and test a pickup update. No notification worker or cron is needed.
 

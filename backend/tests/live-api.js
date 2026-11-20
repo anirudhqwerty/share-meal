@@ -16,10 +16,11 @@ async function main() {
     if (error) throw error;
     tokens[account.role] = data.session.access_token;
   }
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise((resolve) => server.once('listening', resolve));
+  const server = process.argv[2] ? null : app.listen(0, '127.0.0.1');
+  if (server) await new Promise((resolve) => server.once('listening', resolve));
+  const base = process.argv[2]?.replace(/\/$/, '') || `http://127.0.0.1:${server.address().port}`;
   const request = async (route, role, method = 'GET', body) => {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}${route}`, {
+    const response = await fetch(`${base}${route}`, {
       method, headers: { Authorization: `Bearer ${tokens[role]}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -53,6 +54,6 @@ async function main() {
     if (error) throw error;
     assert.ok(status.every((item) => item.push_status === 'skipped'));
     console.log('LIVE PASS: PostGIS radius, saved preference, request, approval, pickup relation, completion, durable notifications, read/read-all, and no-token handling.');
-  } finally { await new Promise((resolve) => server.close(resolve)); }
+  } finally { if (server) await new Promise((resolve) => server.close(resolve)); }
 }
 main().catch((error) => { console.error(error.message); process.exitCode = 1; });
