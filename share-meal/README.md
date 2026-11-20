@@ -75,8 +75,15 @@ share-meal/
 5.  **Setup Supabase:** For a new database, run `schema.sql` once, then use `node ../backend/scripts/migrate.js <private-token-file>` from this folder. The runner applies migrations 001–005 and the backend storage migration in one transaction. Existing databases use the same runner. See `../backend/README.md` for permissions and notification delivery details.
 6.  **Run locally:** Start the backend from `../backend` with `npm install` and `npm start`, then start Expo from this folder with `npx expo start`.
 
-Remote push notifications also need an EAS project ID and Android FCM/iOS APNs credentials. Set `EAS_PROJECT_ID` in the app `.env` and configure the credentials for the EAS project. Android remote push requires a development or production build; it is unavailable in Expo Go on Android.
+Remote push is Android-only. It needs the linked EAS project and Firebase Cloud Messaging credentials. Android remote push requires a development or production build; it is unavailable in Expo Go. Inbox notifications remain available on iOS and web.
 
-The app is linked to `@anirudhqwerty1/share-meal` in EAS. `eas.json` defines development, preview, and production profiles; no build or release is automatic. The configured identifiers are `com.anirudh.sharemeal` on Android and iOS. Native push imports are disabled in Expo Go and on web. A notification tap waits for authentication before opening the inbox.
+The app is linked to `@anirudhqwerty1/share-meal` in EAS. `eas.json` defines development, preview, and production profiles; no build or release is automatic. The configured identifiers are `com.anirudh.sharemeal` on Android and iOS. Push imports are disabled outside Android development/production builds. A notification tap waits for authentication before opening the inbox.
+
+For Android Firebase setup:
+
+1. Register the Android app in Firebase with package `com.anirudh.sharemeal`.
+2. Put its `google-services.json` in this app folder, beside `app.json`. The dynamic config uses it automatically when present. `GOOGLE_SERVICES_FILE` can override the path.
+3. Upload the Firebase service-account JSON for FCM v1 to the linked EAS project's Android push credentials using `eas credentials --platform android`. This private key is separate from `google-services.json`; do not put it in the mobile bundle or Git.
+4. Build and install an Android development/preview app, allow notifications, and test a pickup update. No notification worker or cron is needed.
 
 Run `npm run typecheck`, `npm run lint`, and `npx expo export --platform android --max-workers 2` or `--platform web` before release. Two workers avoid excessive memory use on machines with many CPU cores. SDK 54 still has upstream dependency audit findings; do not force an incompatible SDK upgrade through `npm audit fix --force`.

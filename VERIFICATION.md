@@ -9,7 +9,7 @@
 - Refined welcome, login, registration, donor Home/Post/History/detail, NGO Map/Browse/Requests/detail, shared controls, and Notifications. Removed fabricated welcome counts and meal estimates; kept actual records and existing brand assets.
 - Added map radius controls, accurate circle bounds, marker selection, listing tray, browser maps, organization-location fallback, and manual registration location selection.
 - Fixed stale list refresh, account-load races, infinite detail spinners, incorrect request messages, donation form reset, text contrast, touch targets, reduced-motion skeletons, and browser confirmation dialogs.
-- Implemented notifications last: transactional inbox creation, listing links, pagination, read/read-all, foreground refresh, auth-safe notification taps, token rotation checks, delivery attempts, Expo tickets, and receipt processing.
+- Implemented notifications last: transactional inbox creation, listing links, pagination, read/read-all, foreground refresh, auth-safe notification taps, token rotation checks, direct Android delivery attempts, and Expo tickets. The later simplification removed the receipt poller and external worker.
 
 ## Evidence
 
@@ -49,8 +49,8 @@ This records evidence and limits, not a certification that every possible state 
 ## Remaining release work
 
 1. Deploy the task branch's API and ship/rebuild the frontend together. The configured production API is still the older deployment. In particular, the new radius-preferences endpoint and pickup relations need the new API. Database notification triggers deliberately preserve compatibility with legacy API writes until that release.
-2. EAS project `@anirudhqwerty1/share-meal` is linked, and development/preview/production profiles exist. Android FCM and iOS APNs credentials still need configuration and a development/production native build. Remote push cannot be proven in Expo Go; no signed build or app-store release was started.
-3. Configure a recurring notification worker for `backend/scripts/deliver-notifications.js` to recover interrupted delivery and reconcile receipts independently of user activity. Mutation requests already await their initial delivery attempt; inbox reads retry pending/failed messages.
+2. EAS project `@anirudhqwerty1/share-meal` is linked, and development/preview/production profiles exist. Android FCM credentials and an Android development/production build still need setup. Push is now Android-only; APNs is not required. Remote push cannot be proven in Expo Go; no signed build or app-store release was started.
+3. No recurring worker is required. Mutation requests await the direct push attempt; later requests recover interrupted claims and retry pending/failed messages. Receipt polling was removed at the user's request to keep the system simple.
 4. The SDK 54 frontend production dependency audit reports 21 upstream findings: 17 moderate and 4 high, including `decode-uri-component`, `query-string`, `expo-router`, and `image-size`. Safe compatible updates and a patched PostCSS override were applied. A global image-size override broke Metro and was removed. No forced incompatible Expo SDK upgrade was made.
 5. Verify physical Android push delivery, iOS signing/runtime, tablet layouts, complete keyboard navigation, screen readers, photo upload, and remaining permission/network transitions before release.
 

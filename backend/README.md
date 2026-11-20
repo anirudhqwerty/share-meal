@@ -18,15 +18,9 @@ Business tables and mutation RPCs are restricted to the service role. API routes
 
 New transactional RPCs create inbox notifications in the same database transaction. Legacy API versions keep their existing notification behavior during a rolling release. Push delivery is awaited with a timeout, and status, attempts, ticket ID, and errors remain in the protected database. API responses omit these internal fields.
 
-Configure an external recurring worker to run:
+No worker or cron is required. The API sends Android pushes directly after a food/pickup change. A later API request can retry a failed or interrupted attempt, up to three attempts total. The API records Expo's immediate acceptance/rejection; it does not poll delivery receipts or guarantee that a phone displayed the push. Inbox notifications remain saved even if push delivery fails.
 
-```powershell
-node scripts/deliver-notifications.js
-```
-
-This processes pending and failed deliveries, recovers interrupted claims, and checks Expo receipts. No recurring worker or deployment is created by this repository. Failed deliveries are retried at most three times. Receipt acceptance by FCM/APNs does not prove the device displayed the notification.
-
-Remote push also requires a development/production app with its EAS project ID and Android FCM/iOS APNs credentials. Expo Go on Android does not support remote push. Inbox notifications work without a device token.
+Remote push requires an Android development/production build with its EAS project ID and FCM credentials. iOS and web do not register for remote push. Expo Go on Android does not support remote push. Inbox notifications work on every platform without a device token.
 
 ## Verification
 

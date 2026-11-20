@@ -27,7 +27,7 @@ const fake = {
   },
 };
 require.cache[require.resolve('../lib/supabase')] = { exports: { supabase: fake } };
-const { deliverNotifications, reconcileReceipts } = require('../lib/push-notifications');
+const { deliverNotifications } = require('../lib/push-notifications');
 beforeEach(() => {
   users = [{ id: 'user-one', expo_push_token: token }];
   notifications = [{ id: 'notice-one', user_id: 'user-one', donation_id: 'food-one', title: 'Pickup approved', message: 'Collect food.', push_status: 'pending', push_attempts: 0 }];
@@ -70,11 +70,19 @@ test('network failure is persisted and later delivery retries within limit', asy
   await deliverNotifications();
   assert.equal(notifications[0].push_attempts, 3);
 });
-test('late receipt for old token never clears replacement device token', async () => {
-  notifications[0] = { ...notifications[0], push_status: 'sent', push_ticket_id: 'ticket-one', push_token: token, push_updated_at: new Date(Date.now() - 3600000).toISOString() };
-  users[0].expo_push_token = 'ExpoPushToken[replacement-device]';
-  global.fetch = async () => ({ ok: true, json: async () => ({ data: { 'ticket-one': { status: 'error', details: { error: 'DeviceNotRegistered' } } } }) });
-  await reconcileReceipts();
+test('push rejection for old token never clears replacement device token', async () => {
+  global.fetch = async () => {
+    users[0].expo_push_token = 'ExpoPushToken[replacement-device]';
+    return { ok: true, json: async () => ({ data: [{ status: 'error', details: { error: 'DeviceNotRegistered' } }] }) };
+  };
+  await deliverNotifications();
   assert.equal(users[0].expo_push_token, 'ExpoPushToken[replacement-device]');
   assert.equal(notifications[0].push_status, 'failed');
+});
+
+test('next API request recovers interrupted sending without a worker', async () => {
+  notifications[0] = { ...notifications[0], push_status: 'sending', push_attempts: 1, push_updated_at: new Date(Date.now() - 3600000).toISOString() };
+  await deliverNotifications({ userId: 'user-one' });
+  assert.equal(notifications[0].push_status, 'sent');
+  assert.equal(notifications[0].push_attempts, 2);
 });
