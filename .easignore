@@ -1,0 +1,33 @@
+# EAS archives from the Git root; the Expo app lives in share-meal/.
+/*
+!/share-meal
+!/.easignore
+
+**/node_modules/
+**/.expo/
+**/dist/
+**/web-build/
+**/.kotlin/
+**/.env*
+**/expo-env.d.ts
+**/*.tsbuildinfo
+**/*.orig.*
+**/*.jks
+**/*.p8
+**/*.p12
+**/*.key
+**/*.pem
+**/*.mobileprovision
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+**/credentials.json
+**/npm-debug.*
+**/yarn-debug.*
+**/yarn-error.*
+**/.DS_Store
+/share-meal/app-example/
+/share-meal/android/
+/share-meal/ios/
+
+# Public Firebase app configuration stays out of Git, but belongs in builds.
+!/share-meal/google-services.json
