@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from '@/components/maps/Map';
 import { Colors, Radius, Typography, Shadow, Spacing } from '@/constants/theme';
+import { coordinates } from '@/utils/geo';
 
 interface LocationPreviewMapProps {
   latitude?: number | null;
@@ -16,7 +17,8 @@ export function LocationPreviewMap({
   title = 'Location Preview',
   height = 170,
 }: LocationPreviewMapProps) {
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+  const point = coordinates(latitude, longitude);
+  if (!point) {
     return (
       <View style={[styles.empty, { height }]}>
         <Text style={styles.emptyTitle}>{title}</Text>
@@ -32,13 +34,12 @@ export function LocationPreviewMap({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
         initialRegion={{
-          latitude,
-          longitude,
+          ...point,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
       >
-        <Marker coordinate={{ latitude, longitude }} />
+        <Marker coordinate={point} />
       </MapView>
       <View style={styles.label}>
         <Text style={styles.labelText}>{title}</Text>

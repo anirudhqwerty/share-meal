@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, RefreshControl,
-  TouchableOpacity, Alert, TextInput,
+  TouchableOpacity, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { donationsService } from '@/services/donations.service';
 import { useLocation } from '@/hooks/useLocation';
@@ -15,15 +15,21 @@ import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { parseServerDate } from '@/utils/time';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useNow } from '@/hooks/useNow';
+import { coordinates } from '@/utils/geo';
 
 type SortBy = 'distance' | 'expiry';
 
 export default function NgoListingsScreen() {
+  const now = useNow();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { location } = useLocation();
+  const { location: deviceLocation, loading: locationLoading, refresh: refreshLocation } = useLocation();
   const { profile } = useAuth();
+  const savedLocation = coordinates(profile?.latitude, profile?.longitude);
+  const latitude = deviceLocation?.latitude ?? savedLocation?.latitude;
+  const longitude = deviceLocation?.longitude ?? savedLocation?.longitude;
+  const location = React.useMemo(() => latitude != null && longitude != null ? { latitude, longitude } : null, [latitude, longitude]);
   const [donations, setDonations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,12 +52,20 @@ export default function NgoListingsScreen() {
     }
   }, [location, radius]);
 
-  useEffect(() => { if (location) load(); }, [location, load]);
+  useFocusEffect(useCallback(() => {
+    if (location) {
+      void load();
+    } else if (!locationLoading) {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [location, locationLoading, load]));
 
   // Filter by search query
   const filtered = donations.filter((d) => {
+    if ((parseServerDate(d.expiry_time)?.getTime() || 0) <= now) return false;
     if (!search.trim()) return true;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     return (
       d.food_type?.toLowerCase().includes(q) ||
       d.organization_name?.toLowerCase().includes(q) ||
@@ -75,7 +89,8 @@ export default function NgoListingsScreen() {
         <Ionicons name="search-outline" size={16} color={Colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search food, NGO…"
+          placeholder="Search food or donor"
+          accessibilityLabel="Search food or donor"
           placeholderTextColor={Colors.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -83,7 +98,7 @@ export default function NgoListingsScreen() {
           clearButtonMode="while-editing"
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} hitSlop={16}>
             <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -91,13 +106,14 @@ export default function NgoListingsScreen() {
 
       <View style={styles.metaRow}>
         <Text style={styles.subtitle}>
-          {sorted.length} listing{sorted.length !== 1 ? 's' : ''} within {radius} km
+          {loading ? `Within ${radius} km` : `${sorted.length} listing${sorted.length !== 1 ? 's' : ''} within ${radius} km`}
         </Text>
         <View style={styles.sortRow}>
           <Text style={styles.sortLabel}>Sort:</Text>
           {(['distance', 'expiry'] as const).map((s) => (
             <TouchableOpacity
               key={s}
+              accessibilityRole="button" accessibilityState={{ selected: sortBy === s }}
               style={[styles.sortChip, sortBy === s && styles.sortChipActive]}
               onPress={() => setSortBy(s)}
             >
@@ -116,12 +132,15 @@ export default function NgoListingsScreen() {
     </View>
   );
 
-  if (!location && !loading) {
+  if (!location && !locationLoading && !loading) {
     return (
       <View style={[styles.safe, { paddingTop: insets.top }, styles.center]}>
         <Ionicons name="location-outline" size={48} color={Colors.textMuted} />
         <Text style={styles.emptyTitle}>Location unavailable</Text>
         <Text style={styles.emptyText}>Enable location access to see nearby food donations.</Text>
+        <TouchableOpacity style={styles.emptyBtn} onPress={() => { setLoading(true); void refreshLocation(); }}>
+          <Text style={styles.emptyBtnText}>Try location again</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -157,15 +176,13 @@ export default function NgoListingsScreen() {
               tintColor={Colors.secondary}
             />
           }
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 40).duration(260)}>
+          renderItem={({ item }) => (
               <DonationCard
                 donation={item}
                 onPress={() => router.push({ pathname: '/(ngo)/listing/[id]', params: { id: item.id } })}
               />
-            </Animated.View>
           )}
-          ListEmptyComponent={
+          ListEmptyComponent={!error ?
             <View style={styles.empty}>
               <BrandLogo size={64} variant="contained" />
               <Text style={styles.emptyTitle}>
@@ -174,7 +191,7 @@ export default function NgoListingsScreen() {
               <Text style={styles.emptyText}>
                 {search
                   ? 'Try a different search term.'
-                  : 'Check back soon or expand your notification radius in settings.'}
+                  : 'Check back soon or change your search radius on the map.'}
               </Text>
               {!search && (
                 <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(ngo)')}>
@@ -182,7 +199,7 @@ export default function NgoListingsScreen() {
                   <Text style={styles.emptyBtnText}>Open map</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </View> : null
           }
         />
       )}
@@ -193,7 +210,7 @@ export default function NgoListingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   center: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: Spacing.xl },
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
+  list: { paddingHorizontal: Spacing.lg, paddingBottom: 32, maxWidth: 760, width: '100%', alignSelf: 'center' },
   loadingWrap: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
   header: { paddingTop: Spacing.md, marginBottom: Spacing.sm },
 
@@ -208,7 +225,7 @@ const styles = StyleSheet.create({
   searchIcon: { flexShrink: 0 },
   searchInput: {
     flex: 1, ...Typography.body, color: Colors.text,
-    fontSize: 14, padding: 0,
+    fontSize: 16, padding: 0, minHeight: 28, minWidth: 0,
   },
 
   metaRow: {
@@ -221,7 +238,7 @@ const styles = StyleSheet.create({
   sortLabel: { ...Typography.caption, color: Colors.textMuted, fontSize: 11 },
   sortChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
+    paddingHorizontal: 12, paddingVertical: 10, minHeight: 48,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Alert, KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView,
   StyleSheet, Text, View, Image, TouchableOpacity,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,21 +11,23 @@ import * as Haptics from 'expo-haptics';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { Colors, Radius, Shadow, Spacing, Typography } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { donationsService } from '@/services/donations.service';
 import { useLocation } from '@/hooks/useLocation';
 import { LocationPickerMap } from '@/components/LocationPickerMap';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useAuth } from '@/context/AuthContext';
+import { Alert } from '@/utils/alert';
 
 const EXPIRY_PRESETS = [2, 4, 6, 12, 24] as const;
 
 const DEFAULT_COORDS = { latitude: 30.3398, longitude: 76.3869 };
-const DEFAULT_ADDRESS = 'Patiala, Punjab, India';
+const DEFAULT_ADDRESS = 'Choose the pickup location on the map';
 
 export default function NewDonationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { location } = useLocation();
+  const { location, address } = useLocation();
+  const { profile } = useAuth();
 
   const [foodType, setFoodType] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -34,22 +36,28 @@ export default function NewDonationScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [step, setStep] = useState<'form' | 'location'>('form');
-
-  // Bug fix: use actual device location as default if available
   const [customLocation, setCustomLocation] = useState<{ latitude: number; longitude: number }>(
-    DEFAULT_COORDS,
+    profile?.latitude != null && profile?.longitude != null ? { latitude: Number(profile.latitude), longitude: Number(profile.longitude) } : DEFAULT_COORDS,
   );
-  const [customAddress, setCustomAddress] = useState(DEFAULT_ADDRESS);
-  const [locationSet, setLocationSet] = useState(false);
+  const [customAddress, setCustomAddress] = useState(profile?.address || DEFAULT_ADDRESS);
+  const [locationSet, setLocationSet] = useState(profile?.latitude != null && profile?.longitude != null);
+  const manuallySelectedLocation = useRef(false);
+  const submissionInProgress = useRef(false);
+
+  const finishPosting = () => {
+    setFoodType(''); setQuantity(''); setImage(null);
+    setHoursToExpire(4); setCustomHoursText('4');
+    router.replace('/(donor)');
+  };
 
   // Sync device location as default once available (only if user hasn't manually moved the pin)
   useEffect(() => {
-    if (location && !locationSet) {
+    if (location && !profile?.address && !manuallySelectedLocation.current) {
       setCustomLocation({ latitude: location.latitude, longitude: location.longitude });
       setLocationSet(true);
     }
-  }, [location, locationSet]);
+    if (address && !profile?.address && !manuallySelectedLocation.current) setCustomAddress(address);
+  }, [location, address, profile?.address]);
 
   // Bug fix: keep hoursToExpire number and custom text in sync
   const handlePresetPress = (p: number) => {
@@ -60,40 +68,42 @@ export default function NewDonationScreen() {
   const handleCustomHoursChange = (text: string) => {
     setCustomHoursText(text);
     const n = Number(text);
-    if (n > 0 && Number.isFinite(n)) {
-      setHoursToExpire(n);
-    }
+    setHoursToExpire(text.trim() && n > 0 && Number.isFinite(n) ? n : 0);
   };
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need access to your photos to upload a food image.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.75,
-    });
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'We need access to your photos to upload a food image.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.75,
+      });
 
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setImage(result.assets[0].uri);
+      if (!result.canceled && result.assets?.[0]?.uri) setImage(result.assets[0].uri);
+    } catch (error: any) {
+      Alert.alert('Unable to open photos', error.message || 'Please try again.');
     }
   };
 
   const validate = (): string | null => {
     if (!foodType.trim()) return 'Food type is required.';
     if (!quantity.trim()) return 'Quantity is required.';
-    if (!hoursToExpire || hoursToExpire <= 0 || !Number.isFinite(hoursToExpire)) {
-      return 'Enter a valid expiry duration in hours.';
+    if (!hoursToExpire || hoursToExpire <= 0 || !Number.isFinite(hoursToExpire) || hoursToExpire > 168) {
+      return 'Enter an expiry duration from 0 to 168 hours.';
     }
-    if (!customLocation) return 'Pick a pickup location on the map.';
+    if (!locationSet) return 'Wait for your location or choose a pickup location on the map.';
     return null;
   };
 
   const submit = async () => {
+    if (submissionInProgress.current) return;
+
     setError('');
     const validationError = validate();
     if (validationError) {
@@ -101,9 +111,21 @@ export default function NewDonationScreen() {
       return;
     }
 
+    submissionInProgress.current = true;
     setSubmitting(true);
+    const submissionStartedAt = Date.now();
+    const expiry_time = new Date(submissionStartedAt + hoursToExpire * 60 * 60 * 1000).toISOString();
+    const submission = {
+      food_type: foodType.trim(),
+      quantity: quantity.trim(),
+      latitude: customLocation.latitude,
+      longitude: customLocation.longitude,
+      address: customAddress,
+      expiry_time,
+    };
+    let imagePath = '';
+
     try {
-      let imagePath = '';
       if (image) {
         try {
           imagePath = await donationsService.uploadImage(image);
@@ -114,26 +136,65 @@ export default function NewDonationScreen() {
         }
       }
 
-      const expiry_time = new Date(Date.now() + hoursToExpire * 60 * 60 * 1000).toISOString();
-      await donationsService.create({
-        food_type: foodType.trim(),
-        quantity: quantity.trim(),
-        latitude: customLocation.latitude,
-        longitude: customLocation.longitude,
-        address: customAddress,
+      const payload = {
+        ...submission,
         image_path: imagePath,
-        expiry_time,
-      });
+      };
+      await donationsService.create(payload);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
-        'Donation posted! 🎉',
-        'Nearby NGOs have been notified and will reach out soon.',
-        [{ text: 'Great!', onPress: () => router.replace('/(donor)') }],
+        'Donation posted',
+        'Your food is now listed for nearby NGOs.',
+        [{ text: 'View donations', onPress: finishPosting }],
       );
     } catch (e: any) {
+      // A mobile connection can drop after the API has committed the donation but
+      // before Axios receives the 201 response. Reconcile that exact submission
+      // before telling the donor to retry and risk creating a duplicate.
+      if (e?.status == null && (e?.code === 'ERR_NETWORK' || e?.code === 'ECONNABORTED' || e?.message === 'Network Error')) {
+        try {
+          const donations = await donationsService.getMyDonations();
+          const expectedExpiry = new Date(expiry_time).getTime();
+          const savedDonation = donations?.find((donation: any) => {
+            const createdAt = new Date(donation.created_at).getTime();
+            return (
+              donation.food_type === submission.food_type &&
+              donation.quantity === submission.quantity &&
+              Number(donation.latitude) === submission.latitude &&
+              Number(donation.longitude) === submission.longitude &&
+              new Date(donation.expiry_time).getTime() === expectedExpiry &&
+              (donation.image_path || '') === imagePath &&
+              Number.isFinite(createdAt) &&
+              createdAt >= submissionStartedAt - 10_000 &&
+              createdAt <= Date.now() + 5_000
+            );
+          });
+
+          if (savedDonation) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert(
+              'Donation posted',
+              'Your food is now listed for nearby NGOs.',
+              [{ text: 'View donations', onPress: finishPosting }],
+            );
+            return;
+          }
+        } catch {
+          // The connection may also prevent the confirmation lookup; explain that
+          // the donor should check their list before making another submission.
+        }
+
+        Alert.alert(
+          'Connection interrupted',
+          'I couldn’t confirm whether the donation was saved. Check My donations before trying again to avoid a duplicate.',
+        );
+        return;
+      }
+
       Alert.alert('Unable to post donation', e.message);
     } finally {
+      submissionInProgress.current = false;
       setSubmitting(false);
     }
   };
@@ -156,7 +217,7 @@ export default function NewDonationScreen() {
           <Text style={styles.subtitle}>Fill in the details and publish instantly to nearby NGOs.</Text>
 
           {/* Section: Basics */}
-          <Animated.View entering={FadeInDown.delay(60).duration(280)} style={[styles.section, Shadow.sm]}>
+          <View style={styles.section}>
             <View style={styles.sectionHeadRow}>
               <View style={[styles.sectionIconWrap, { backgroundColor: Colors.primaryLight }]}>
                 <Ionicons name="nutrition-outline" size={16} color={Colors.primary} />
@@ -170,6 +231,7 @@ export default function NewDonationScreen() {
               leftIcon="nutrition-outline"
               value={foodType}
               onChangeText={setFoodType}
+              maxLength={500}
             />
             <Input
               label="Quantity"
@@ -177,11 +239,12 @@ export default function NewDonationScreen() {
               leftIcon="layers-outline"
               value={quantity}
               onChangeText={setQuantity}
+              maxLength={100}
             />
-          </Animated.View>
+          </View>
 
           {/* Section: Expiry */}
-          <Animated.View entering={FadeInDown.delay(100).duration(280)} style={[styles.section, Shadow.sm]}>
+          <View style={styles.section}>
             <View style={styles.sectionHeadRow}>
               <View style={[styles.sectionIconWrap, { backgroundColor: '#FEF3C7' }]}>
                 <Ionicons name="time-outline" size={16} color="#D97706" />
@@ -196,6 +259,7 @@ export default function NewDonationScreen() {
                 return (
                   <TouchableOpacity
                     key={p}
+                    accessibilityRole="button" accessibilityLabel={`${p} hours`} accessibilityState={{ selected: active }}
                     style={[styles.presetChip, active && styles.presetChipActive]}
                     onPress={() => handlePresetPress(p)}
                     activeOpacity={0.8}
@@ -222,21 +286,19 @@ export default function NewDonationScreen() {
               <View style={styles.expiryPreview}>
                 <Ionicons name="calendar-outline" size={13} color={Colors.textSecondary} />
                 <Text style={styles.expiryPreviewText}>
-                  Expires at{' '}
+                  Expires{' '}
                   <Text style={styles.expiryPreviewBold}>
-                    {new Date(Date.now() + hoursToExpire * 3600000).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
+                    {new Date(Date.now() + hoursToExpire * 3600000).toLocaleString('en-IN', {
+                      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                     })}
                   </Text>
-                  {' '}today
                 </Text>
               </View>
             )}
-          </Animated.View>
+          </View>
 
           {/* Section: Photo */}
-          <Animated.View entering={FadeInDown.delay(140).duration(280)} style={[styles.section, Shadow.sm]}>
+          <View style={styles.section}>
             <View style={styles.sectionHeadRow}>
               <View style={[styles.sectionIconWrap, { backgroundColor: Colors.secondaryLight }]}>
                 <Ionicons name="camera-outline" size={16} color={Colors.secondary} />
@@ -249,12 +311,13 @@ export default function NewDonationScreen() {
 
             <TouchableOpacity
               onPress={pickImage}
+              accessibilityRole="button" accessibilityLabel={image ? 'Change food photo' : 'Add food photo'}
               style={styles.imagePicker}
               activeOpacity={0.85}
             >
               {image ? (
                 <View style={StyleSheet.absoluteFill}>
-                  <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                  <Image accessibilityLabel="Selected food photo" source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
                   <View style={styles.imageOverlay}>
                     <View style={styles.imageOverlayBtn}>
                       <Ionicons name="camera" size={18} color={Colors.white} />
@@ -268,17 +331,17 @@ export default function NewDonationScreen() {
                     <Ionicons name="camera-outline" size={26} color={Colors.primary} />
                   </View>
                   <Text style={styles.imagePlaceholderTitle}>Add a food photo</Text>
-                  <Text style={styles.imagePlaceholderHelp}>Helps NGOs see what's available</Text>
+                  <Text style={styles.imagePlaceholderHelp}>Helps NGOs see what&apos;s available</Text>
                 </View>
               )}
             </TouchableOpacity>
-          </Animated.View>
+          </View>
 
           {/* Section: Location */}
-          <Animated.View entering={FadeInDown.delay(180).duration(280)} style={[styles.section, Shadow.sm]}>
+          <View style={styles.section}>
             <View style={styles.sectionHeadRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#EDE9FE' }]}>
-                <Ionicons name="location-outline" size={16} color="#7C3AED" />
+              <View style={styles.sectionIconWrap}>
+                <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
               </View>
               <View style={styles.sectionLabelRow}>
                 <Text style={styles.sectionLabel}>Pickup location</Text>
@@ -290,13 +353,14 @@ export default function NewDonationScreen() {
               initialLatitude={customLocation.latitude}
               initialLongitude={customLocation.longitude}
               onLocationChange={(loc, addr) => {
+                manuallySelectedLocation.current = true;
                 setCustomLocation(loc);
                 setLocationSet(true);
                 if (addr) setCustomAddress(addr);
               }}
               height={220}
             />
-          </Animated.View>
+          </View>
 
           {/* Error message */}
           {!!error && (
@@ -315,7 +379,7 @@ export default function NewDonationScreen() {
           />
 
           <Text style={styles.publishNote}>
-            Nearby NGOs will receive a notification immediately after publishing.
+            Choose an expiry time that reflects how long the food is safe to collect.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -326,14 +390,12 @@ export default function NewDonationScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   flex: { flex: 1 },
-  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 60, paddingTop: Spacing.sm },
+  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 32, paddingTop: Spacing.sm, maxWidth: 760, width: '100%', alignSelf: 'center' },
   subtitle: { ...Typography.body, color: Colors.textSecondary, marginBottom: Spacing.lg, lineHeight: 20 },
 
   section: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.xl,
-    borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1, borderColor: Colors.border,
     marginBottom: Spacing.md,
   },
   sectionHeadRow: {
@@ -341,7 +403,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   sectionIconWrap: {
-    width: 30, height: 30, borderRadius: 9,
+    width: 24, height: 24, borderRadius: 0,
     alignItems: 'center', justifyContent: 'center',
   },
   sectionLabelRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -358,7 +420,7 @@ const styles = StyleSheet.create({
 
   presetRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.sm },
   presetChip: {
-    flex: 1, paddingVertical: 11, borderRadius: Radius.md,
+    flex: 1, paddingVertical: 11, minHeight: 48, borderRadius: Radius.md,
     backgroundColor: Colors.surface,
     borderWidth: 1.5, borderColor: Colors.border,
     alignItems: 'center',

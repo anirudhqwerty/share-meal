@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Badge } from '@/components/ui/Badge';
 import { Colors, Radius, Shadow, Spacing, Typography } from '@/constants/theme';
 import { formatTimeLeft } from '@/utils/time';
@@ -21,10 +20,11 @@ interface Donation {
 export function DonationCard({ donation, onPress }: { donation: Donation; onPress?: () => void }) {
   const { text: timeLeft, urgent, expired } = formatTimeLeft(donation.expiry_time);
   const imageUri = donation.image_path && donation.image_path.trim().length > 0 ? donation.image_path : null;
+  const [failedImage, setFailedImage] = useState<string | null>(null);
 
   return (
-    <Animated.View entering={FadeInDown.duration(260)}>
       <TouchableOpacity
+        accessibilityRole="button" accessibilityLabel={`${donation.food_type}, ${donation.quantity}, ${timeLeft}`}
         onPress={onPress}
         activeOpacity={0.92}
         style={[
@@ -34,8 +34,8 @@ export function DonationCard({ donation, onPress }: { donation: Donation; onPres
         ]}
       >
         <View style={styles.row}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.image} />
+          {imageUri && failedImage !== imageUri ? (
+            <Image accessibilityLabel={donation.food_type} source={{ uri: imageUri }} onError={() => setFailedImage(imageUri)} style={styles.image} />
           ) : (
             <View style={styles.imageFallback}>
               <Ionicons name="nutrition-outline" size={30} color={Colors.primary} />
@@ -44,7 +44,7 @@ export function DonationCard({ donation, onPress }: { donation: Donation; onPres
           <View style={styles.info}>
             <View style={styles.topRow}>
               <Text style={styles.foodType} numberOfLines={1}>{donation.food_type}</Text>
-              <Badge status={donation.status as any} size="sm" />
+              <Badge status={expired && ['available', 'pending'].includes(donation.status) ? 'expired' : donation.status as any} size="sm" />
             </View>
 
             <View style={styles.metaRow}>
@@ -75,10 +75,10 @@ export function DonationCard({ donation, onPress }: { donation: Donation; onPres
                   {timeLeft}
                 </Text>
               </View>
-              {donation.distance_km !== undefined ? (
+              {donation.distance_km != null && Number.isFinite(Number(donation.distance_km)) ? (
                 <View style={styles.distChip}>
                   <Ionicons name="navigate-outline" size={12} color={Colors.primary} />
-                  <Text style={styles.distText}>{donation.distance_km.toFixed(1)} km</Text>
+                  <Text style={styles.distText}>{Number(donation.distance_km).toFixed(1)} km</Text>
                 </View>
               ) : null}
             </View>
@@ -86,7 +86,6 @@ export function DonationCard({ donation, onPress }: { donation: Donation; onPres
           <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
         </View>
       </TouchableOpacity>
-    </Animated.View>
   );
 }
 
@@ -100,9 +99,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   cardUrgent: {
-    borderColor: Colors.warningBg,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.warning,
+    borderColor: Colors.warning,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   image: {
@@ -120,11 +117,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   info: { flex: 1, gap: 3 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
-  foodType: { ...Typography.h4, color: Colors.text, flex: 1 },
+  topRow: { alignItems: 'flex-start', gap: 6, marginBottom: 2 },
+  foodType: { ...Typography.h4, color: Colors.text, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   metaText: { ...Typography.caption, color: Colors.textSecondary, flexShrink: 1 },
-  footer: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  footer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',

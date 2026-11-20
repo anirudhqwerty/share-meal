@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DonationCard } from '@/components/DonationCard';
 import { DonationCardSkeletonList } from '@/components/skeletons/DonationCardSkeleton';
 import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { donationsService } from '@/services/donations.service';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { parseServerDate } from '@/utils/time';
+import { useNow } from '@/hooks/useNow';
 
 type StatusFilter = 'all' | 'claimed' | 'available' | 'expired';
 
@@ -25,6 +26,7 @@ const STATUS_META: Record<StatusFilter, {
 };
 
 export default function DonorHistoryScreen() {
+  const now = useNow();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [donations, setDonations] = useState<any[]>([]);
@@ -46,13 +48,16 @@ export default function DonorHistoryScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
+  const isExpired = (donation: any) => {
+    if (donation.status === 'expired') return true;
+    if (donation.status !== 'available' && donation.status !== 'pending') return false;
+    return (parseServerDate(donation.expiry_time)?.getTime() ?? 0) <= now;
+  };
   const completed = donations.filter((d) => d.status === 'claimed');
-  const expired = donations.filter((d) => d.status === 'expired');
-  const active = donations.filter((d) => d.status === 'available' || d.status === 'pending');
-  // Meals estimate: labelled as estimate to be honest with users
-  const mealsEstimate = completed.length * 10;
+  const expired = donations.filter(isExpired);
+  const active = donations.filter((d) => (d.status === 'available' || d.status === 'pending') && !isExpired(d));
 
   const counts: Record<StatusFilter, number> = {
     all: donations.length,
@@ -62,22 +67,17 @@ export default function DonorHistoryScreen() {
   };
 
   const filtered = filter === 'all' ? donations : donations.filter((d) => {
-    if (filter === 'available') return d.status === 'available' || d.status === 'pending';
+    if (filter === 'available') return (d.status === 'available' || d.status === 'pending') && !isExpired(d);
+    if (filter === 'expired') return isExpired(d);
     return d.status === filter;
   });
 
   const header = (
     <>
-      <ScreenHeader title="Your impact" />
+      <ScreenHeader title="Donation history" />
 
       {/* Impact stat cards */}
-      <Animated.View entering={FadeIn.duration(350)} style={styles.impactCard}>
-        <View style={styles.impactMain}>
-          <Text style={styles.impactNumber}>{mealsEstimate}</Text>
-          <Text style={styles.impactLabel}>Estimated meals provided</Text>
-          <Text style={styles.impactNote}>Based on ~10 meals per claimed donation</Text>
-        </View>
-        <View style={styles.impactDivider} />
+      {!loading && <View style={styles.impactCard}>
         <View style={styles.impactStats}>
           {[
             { icon: 'checkmark-circle' as const, val: completed.length, lbl: 'Claimed', col: Colors.success, bg: Colors.successBg },
@@ -93,7 +93,7 @@ export default function DonorHistoryScreen() {
             </View>
           ))}
         </View>
-      </Animated.View>
+      </View>}
 
       {/* Filter strip */}
       <View style={styles.filterRow}>
@@ -103,6 +103,7 @@ export default function DonorHistoryScreen() {
           return (
             <TouchableOpacity
               key={f}
+              accessibilityRole="button" accessibilityState={{ selected: active }}
               style={[
                 styles.filterChip,
                 active && { backgroundColor: meta.bg, borderColor: meta.color },
@@ -163,17 +164,15 @@ export default function DonorHistoryScreen() {
               tintColor={Colors.primary}
             />
           }
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 40).duration(250)}>
+          renderItem={({ item }) => (
               <DonationCard
                 donation={item}
                 onPress={() =>
                   router.push({ pathname: '/(donor)/donation/[id]', params: { id: item.id } })
                 }
               />
-            </Animated.View>
           )}
-          ListEmptyComponent={
+          ListEmptyComponent={!error ?
             <View style={styles.empty}>
               <View style={[
                 styles.emptyIconWrap,
@@ -198,7 +197,7 @@ export default function DonorHistoryScreen() {
                   <Text style={styles.resetBtnText}>Show all</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </View> : null
           }
         />
       )}
@@ -208,7 +207,7 @@ export default function DonorHistoryScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  list: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 120 },
+  list: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 32, maxWidth: 760, width: '100%', alignSelf: 'center' },
   loadingWrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 120 },
 
   impactCard: {
@@ -242,7 +241,7 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: 7, flexWrap: 'wrap', marginBottom: Spacing.md },
   filterChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 11, paddingVertical: 7,
+    paddingHorizontal: 12, paddingVertical: 10, minHeight: 48,
     borderRadius: Radius.full, backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,
   },

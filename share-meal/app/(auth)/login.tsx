@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
@@ -46,6 +46,7 @@ export default function LoginScreen() {
   };
 
   const handleContinue = async () => {
+    if (loading) return;
     if (!normalizedRole) {
       Alert.alert('Role required', 'Please choose your role first.');
       router.replace('/(auth)/welcome');
@@ -55,12 +56,13 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (mode === 'register') {
-        const signUpRes = await authService.signUpWithPassword(email.trim().toLowerCase(), password);
+        const signUpRes = await authService.signUpWithPassword(email.trim().toLowerCase(), password, normalizedRole);
         if (!signUpRes.session) {
           Alert.alert(
-            'Email confirmation enabled',
-            'Your Supabase project is requiring email confirmation, so no access token is created yet. Disable email confirmations in Supabase Auth settings, or confirm the email first, then login.'
+            'Check your email',
+            'Open the confirmation link in your email, then return here to sign in.'
           );
+          setMode('login');
           return;
         }
         // Brand-new signup — always needs to complete profile
@@ -68,7 +70,7 @@ export default function LoginScreen() {
       } else {
         const signInRes = await authService.signInWithPassword(email.trim().toLowerCase(), password);
         if (!signInRes.session) {
-          Alert.alert('Login failed', 'No active session received from Supabase.');
+          Alert.alert('Sign-in incomplete', 'Please try signing in again.');
           return;
         }
         // AuthGuard will route to the right dashboard (or register) once loadUser completes.
@@ -92,30 +94,21 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/(auth)/welcome')} style={styles.back}>
             <Ionicons name="arrow-back" size={22} color={Colors.text} />
           </TouchableOpacity>
 
-          <Animated.View entering={FadeInDown.duration(350)} style={[styles.rolePill, { backgroundColor: isNgo ? Colors.secondaryLight : Colors.primaryLight }]}>
-            <Ionicons
-              name={isNgo ? 'people' : 'restaurant'}
-              size={16}
-              color={isNgo ? Colors.secondary : Colors.primary}
-            />
-            <Text style={[styles.roleLabel, { color: isNgo ? Colors.secondary : Colors.primary }]}>
-              {isNgo ? 'NGO Account' : 'Donor Account'}
-            </Text>
-          </Animated.View>
-
           <View style={styles.switcher}>
             <TouchableOpacity
-              onPress={() => setMode('login')}
+              accessibilityRole="tab" accessibilityState={{ selected: mode === 'login' }} disabled={loading}
+              onPress={() => { setMode('login'); clearErrors(); }}
               style={[styles.switchBtn, mode === 'login' && styles.switchBtnActive]}
             >
               <Text style={[styles.switchText, mode === 'login' && styles.switchTextActive]}>Login</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setMode('register')}
+              accessibilityRole="tab" accessibilityState={{ selected: mode === 'register' }} disabled={loading}
+              onPress={() => { setMode('register'); clearErrors(); }}
               style={[styles.switchBtn, mode === 'register' && styles.switchBtnActive]}
             >
               <Text style={[styles.switchText, mode === 'register' && styles.switchTextActive]}>Create Account</Text>
@@ -128,7 +121,7 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>
             {mode === 'login'
               ? 'Sign in with email and password to continue.'
-              : 'Register with email/password first, then complete your role profile.'}
+              : `Create your ${isNgo ? 'NGO' : 'donor'} account, then add your organization details.`}
           </Text>
 
           <Input
@@ -137,6 +130,8 @@ export default function LoginScreen() {
             placeholder="you@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
+            autoCorrect={false}
             value={email}
             onChangeText={setEmail}
             error={emailError}
@@ -147,10 +142,14 @@ export default function LoginScreen() {
             leftIcon="lock-closed-outline"
             placeholder="Minimum 6 characters"
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             value={password}
             onChangeText={setPassword}
             error={passwordError}
             returnKeyType={mode === 'register' ? 'next' : 'done'}
+            onSubmitEditing={mode === 'login' ? handleContinue : undefined}
           />
           {mode === 'register' && (
             <Input
@@ -165,7 +164,7 @@ export default function LoginScreen() {
             />
           )}
           <Button
-            title={mode === 'login' ? 'Login & Continue' : 'Register & Continue'}
+            title={mode === 'login' ? 'Sign in' : 'Create account'}
             onPress={handleContinue}
             loading={loading}
             fullWidth
@@ -181,9 +180,9 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
   kav: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 40 },
+  scroll: { flexGrow: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 40 },
   back: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 48, height: 48, borderRadius: 12,
     backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center',
     marginBottom: Spacing.xl,
   },

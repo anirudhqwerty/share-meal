@@ -1,7 +1,6 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { Colors, Radius, Shadow, Typography } from '@/constants/theme';
+import React, { useState } from 'react';
+import { Pressable, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle, StyleProp } from 'react-native';
+import { Colors, Radius } from '@/constants/theme';
 
 interface ButtonProps {
   onPress: () => void;
@@ -10,75 +9,38 @@ interface ButtonProps {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   fullWidth?: boolean;
 }
 
-export function Button({
-  onPress, title, variant = 'primary', size = 'md',
-  loading, disabled, style, textStyle, fullWidth = false,
-}: ButtonProps) {
-  const isDisabled = disabled || loading;
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  const onPressIn = () => { scale.value = withSpring(0.98); };
-  const onPressOut = () => { scale.value = withSpring(1); };
-
+export function Button({ onPress, title, variant = 'primary', size = 'md', loading = false,
+  disabled = false, style, textStyle, fullWidth = false }: ButtonProps) {
+  const filled = variant === 'primary' || variant === 'danger';
+  const [focused, setFocused] = useState(false);
+  const color = filled ? Colors.white : variant === 'secondary' ? Colors.secondary : Colors.primary;
   return (
-    <Animated.View style={animatedStyle}>
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        activeOpacity={0.9}
-        disabled={isDisabled}
-        style={[
-          styles.base,
-          styles[`size_${size}`],
-          styles[`variant_${variant}`],
-          fullWidth && { width: '100%' },
-          isDisabled && styles.disabled,
-          variant === 'primary' && Shadow.lg,
-          style,
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator color={variant === 'primary' ? Colors.white : Colors.primary} size="small" />
-        ) : (
-          <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`], textStyle]}>
-            {title}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </Animated.View>
+    <Pressable onPress={onPress} disabled={disabled || loading} accessibilityRole="button"
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      accessibilityLabel={title} accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      style={({ pressed }) => [styles.base, styles[variant], styles[size],
+        fullWidth && styles.full, pressed && styles.pressed,
+        focused && styles.focused, (disabled || loading) && styles.disabled, style]}>
+      {loading && <ActivityIndicator color={color} size="small" />}
+      <Text style={[styles.text, { color }, textStyle]}>{title}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.lg, flexDirection: 'row' },
-
-  size_sm: { paddingVertical: 8, paddingHorizontal: 16, minHeight: 36 },
-  size_md: { paddingVertical: 14, paddingHorizontal: 24, minHeight: 50 },
-  size_lg: { paddingVertical: 18, paddingHorizontal: 32, minHeight: 58 },
-
-  variant_primary: { backgroundColor: Colors.primary },
-  variant_secondary: { backgroundColor: Colors.secondaryLight, borderWidth: 1.5, borderColor: Colors.secondary },
-  variant_outline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.primary },
-  variant_ghost: { backgroundColor: Colors.primaryLight },
-  variant_danger: { backgroundColor: Colors.error },
-
-  disabled: { opacity: 0.45 },
-
-  text: { ...Typography.body, fontWeight: '700' },
-  text_primary: { color: Colors.white },
-  text_secondary: { color: Colors.secondary },
-  text_outline: { color: Colors.primary },
-  text_ghost: { color: Colors.primary },
-  text_danger: { color: Colors.white },
-
-  textSize_sm: { fontSize: 13 },
-  textSize_md: { fontSize: 15 },
-  textSize_lg: { fontSize: 17 },
+  base: { minHeight: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingVertical: 12 },
+  full: { width: '100%' },
+  sm: { paddingHorizontal: 16 }, md: {}, lg: { minHeight: 52 },
+  primary: { backgroundColor: Colors.primary },
+  secondary: { backgroundColor: Colors.secondaryLight },
+  outline: { borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.card },
+  ghost: { backgroundColor: Colors.primaryLight }, danger: { backgroundColor: Colors.error },
+  pressed: { opacity: 0.85 }, focused: { outlineWidth: 2, outlineColor: Colors.text, outlineOffset: 3 },
+  disabled: { opacity: 0.55 }, text: { fontSize: 15, lineHeight: 21, fontWeight: '600', textAlign: 'center', flexShrink: 1 },
 });

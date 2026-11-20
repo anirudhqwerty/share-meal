@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +10,19 @@ import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
 import { authService } from '@/services/auth.service';
 import { useLocation } from '@/hooks/useLocation';
 import { useAuth } from '@/context/AuthContext';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { LocationPreviewMap } from '@/components/LocationPreviewMap';
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { Coordinates } from '@/utils/geo';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: 'donor' | 'ngo' }>();
   const normalizedRole = role === 'donor' || role === 'ngo' ? role : null;
-  const { refreshUser } = useAuth();
-  const { location, address, loading: locLoading, refresh: refreshLoc } = useLocation();
+  const { refreshUser, signOut } = useAuth();
+  const { location: deviceLocation, address, loading: locLoading, error: locationError, refresh: refreshLoc } = useLocation();
+  const [location, setLocation] = useState<Coordinates | null>(null);
+  const locationEdited = useRef(false);
+  const addressEdited = useRef(false);
 
   const isDonor = normalizedRole === 'donor';
 
@@ -39,11 +43,12 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   React.useEffect(() => {
-    if (address) {
+    if (deviceLocation && !locationEdited.current) setLocation(deviceLocation);
+    if (address && !addressEdited.current && !locationEdited.current) {
       setOrgAddress(address);
       setNgoAddress(address);
     }
-  }, [address]);
+  }, [address, deviceLocation]);
 
   React.useEffect(() => {
     if (!normalizedRole) {
@@ -65,14 +70,18 @@ export default function RegisterScreen() {
       if (!ngoName.trim()) e.ngoName = 'NGO name is required';
       if (!regNumber.trim()) e.regNumber = 'Registration number is required';
       if (!ngoAddress.trim()) e.ngoAddress = 'Address is required';
-      if (!radius || isNaN(Number(radius))) e.radius = 'Enter a valid number';
+      const radiusKm = Number(radius);
+      if (!/^\d+$/.test(radius) || !Number.isInteger(radiusKm) || radiusKm < 1 || radiusKm > 100) {
+        e.radius = 'Enter a whole number from 1 to 100 km';
+      }
     }
-    if (!location) e.location = 'Could not get location. Please try again.';
+    if (!location) e.location = 'Select your organization location on the map or use your device location.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleRegister = async () => {
+    if (loading) return;
     if (!validate()) return;
     if (!normalizedRole) return;
     setLoading(true);
@@ -116,17 +125,11 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <Animated.View entering={FadeInDown.duration(350)} style={styles.header}>
+          <View style={styles.header}>
             <BrandLogo size={54} variant="contained" />
-            <View style={[styles.roleChip, { backgroundColor: isDonor ? Colors.primaryLight : Colors.secondaryLight }]}>
-              <Ionicons name={isDonor ? 'restaurant' : 'people'} size={15} color={isDonor ? Colors.primary : Colors.secondary} />
-              <Text style={[styles.roleChipText, { color: isDonor ? Colors.primary : Colors.secondary }]}>
-                {isDonor ? 'Donor Profile' : 'NGO Profile'}
-              </Text>
-            </View>
-            <Text style={styles.title}>Set up your profile</Text>
-            <Text style={styles.subtitle}>Just a few details to get you started</Text>
-          </Animated.View>
+            <Text style={styles.title}>Your {isDonor ? 'donor' : 'NGO'} profile</Text>
+            <Text style={styles.subtitle}>Add your organization and collection address.</Text>
+          </View>
 
           {/* Shared */}
           <Input
@@ -136,6 +139,7 @@ export default function RegisterScreen() {
             keyboardType="phone-pad"
             value={phone}
             onChangeText={setPhone}
+            maxLength={20}
           />
 
           {isDonor ? (
@@ -146,6 +150,7 @@ export default function RegisterScreen() {
                 placeholder="e.g. The Grand Hotel"
                 value={orgName}
                 onChangeText={setOrgName}
+                maxLength={255}
                 error={errors.orgName}
               />
               <Input
@@ -153,7 +158,8 @@ export default function RegisterScreen() {
                 leftIcon="location-outline"
                 placeholder="Street, City, State"
                 value={orgAddress}
-                onChangeText={setOrgAddress}
+                onChangeText={(text) => { addressEdited.current = true; setOrgAddress(text); }}
+                maxLength={2000}
                 error={errors.orgAddress}
                 multiline
               />
@@ -166,6 +172,7 @@ export default function RegisterScreen() {
                 placeholder="e.g. Feeding India Foundation"
                 value={ngoName}
                 onChangeText={setNgoName}
+                maxLength={255}
                 error={errors.ngoName}
               />
               <Input
@@ -174,6 +181,7 @@ export default function RegisterScreen() {
                 placeholder="e.g. MH/2024/00123"
                 value={regNumber}
                 onChangeText={setRegNumber}
+                maxLength={100}
                 error={errors.regNumber}
                 autoCapitalize="characters"
               />
@@ -182,7 +190,8 @@ export default function RegisterScreen() {
                 leftIcon="location-outline"
                 placeholder="Street, City, State"
                 value={ngoAddress}
-                onChangeText={setNgoAddress}
+                onChangeText={(text) => { addressEdited.current = true; setNgoAddress(text); }}
+                maxLength={2000}
                 error={errors.ngoAddress}
                 multiline
               />
@@ -206,7 +215,7 @@ export default function RegisterScreen() {
                 <Ionicons name="location" size={20} color={location ? Colors.success : Colors.textMuted} />
               </View>
               <View style={styles.locText}>
-                <Text style={styles.locTitle}>{location ? 'Location Detected ✓' : 'Detecting Location…'}</Text>
+                <Text style={styles.locTitle}>{location ? 'Organization location' : locLoading ? 'Finding your location…' : 'Choose your location'}</Text>
                 {location && (
                   <Text style={styles.locCoords}>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</Text>
                 )}
@@ -214,18 +223,24 @@ export default function RegisterScreen() {
               </View>
               {locLoading && <ActivityIndicator size="small" color={Colors.primary} />}
               {!locLoading && (
-                <TouchableOpacity onPress={refreshLoc}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Use device location" style={{ minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center' }} onPress={() => { locationEdited.current = false; void refreshLoc(); }}>
                   <Ionicons name="refresh" size={20} color={Colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
           </View>
-          <LocationPreviewMap
-            latitude={location?.latitude}
-            longitude={location?.longitude}
-            title="Detected Location"
-            height={180}
+          {!location && locationError ? <Text style={styles.locError}>{locationError}</Text> : null}
+          <LocationPickerMap
+            initialLatitude={location?.latitude}
+            initialLongitude={location?.longitude}
+            onLocationChange={(point, selectedAddress) => {
+              locationEdited.current = true;
+              setLocation(point);
+              if (selectedAddress) { setOrgAddress(selectedAddress); setNgoAddress(selectedAddress); }
+            }}
+            height={220}
           />
+          <Button title="Use another account" variant="ghost" disabled={loading} onPress={() => { void signOut().catch((error) => Alert.alert('Could not sign out', error.message)); }} style={{ marginTop: 12 }} />
 
           <Button
             title="Complete Registration"
@@ -244,7 +259,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
   kav: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 50 },
+  scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 32, maxWidth: 560, width: '100%', alignSelf: 'center' },
   header: { marginBottom: Spacing.xl, gap: 10 },
   roleChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,

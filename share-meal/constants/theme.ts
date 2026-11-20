@@ -1,17 +1,17 @@
 // Brand colors for Share-Meal — light/white themed
 export const Colors = {
   // Brand
-  primary: '#FF6B35',
+  primary: '#B83E17',
   primaryLight: '#FFF1EC',
-  primaryDark: '#D94E21',
+  primaryDark: '#923012',
   primarySoft: '#FFE5DB',
-  accent: '#5A8CFF',
+  accent: '#245DB3',
   accentLight: '#EEF3FF',
-  secondary: '#13B886',
+  secondary: '#087657',
   secondaryLight: '#EAFBF5',
 
   // Backgrounds
-  background: '#F7F8FC',
+  background: '#FAF9F6',
   card: '#FFFFFF',
   surface: '#F1F4F9',
   input: '#F6F7FB',
@@ -19,40 +19,40 @@ export const Colors = {
   // Text
   text: '#171A22',
   textSecondary: '#5D6473',
-  textMuted: '#8D95A5',
+  textMuted: '#687180',
 
   // Borders
   border: '#E4E8F0',
   divider: '#EEF1F6',
 
   // Semantic
-  success: '#10B981',
+  success: '#087657',
   successBg: '#ECFDF5',
-  warning: '#F59E0B',
+  warning: '#925600',
   warningBg: '#FFFBEB',
-  error: '#EF4444',
+  error: '#B42330',
   errorBg: '#FEF2F2',
-  info: '#3B82F6',
+  info: '#245DB3',
   infoBg: '#EFF6FF',
 
   // Donation status
-  available: '#10B981',
+  available: '#087657',
   availableBg: '#ECFDF5',
-  pending: '#F59E0B',
+  pending: '#925600',
   pendingBg: '#FFFBEB',
-  claimed: '#3B82F6',
+  claimed: '#245DB3',
   claimedBg: '#EFF6FF',
-  expired: '#EF4444',
+  expired: '#B42330',
   expiredBg: '#FEF2F2',
-  approved: '#10B981',
+  approved: '#087657',
   approvedBg: '#ECFDF5',
-  rejected: '#EF4444',
+  rejected: '#B42330',
   rejectedBg: '#FEF2F2',
 
   white: '#FFFFFF',
   black: '#000000',
   overlay: 'rgba(0,0,0,0.45)',
-  gradientWarm: ['#FF6B35', '#FF8B5B'] as const,
+  gradientWarm: ['#B83E17', '#923012'] as const,
   gradientSoft: ['#FFF3EE', '#FFFFFF'] as const,
 };
 
@@ -71,8 +71,8 @@ export const Radius = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 20,
-  xxl: 28,
+  xl: 16,
+  xxl: 20,
   full: 999,
 };
 
@@ -80,35 +80,35 @@ export const Shadow = {
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0,
     shadowRadius: 3,
-    elevation: 2,
+    elevation: 0,
   },
   md: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 2,
   },
   lg: {
-    shadowColor: '#FF6B35',
+    shadowColor: '#171A22',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0,
     shadowRadius: 14,
-    elevation: 8,
+    elevation: 0,
   },
 };
 
 export const Typography = {
-  h1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.5 },
-  h2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.3 },
+  h1: { fontSize: 24, fontWeight: '700' as const, letterSpacing: -0.4 },
+  h2: { fontSize: 20, fontWeight: '700' as const, letterSpacing: -0.3 },
   h3: { fontSize: 18, fontWeight: '600' as const },
   h4: { fontSize: 16, fontWeight: '600' as const },
   body: { fontSize: 14, fontWeight: '400' as const, lineHeight: 20 },
   bodyLg: { fontSize: 16, fontWeight: '400' as const, lineHeight: 24 },
   caption: { fontSize: 12, fontWeight: '400' as const },
-  label: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.5 },
+  label: { fontSize: 13, fontWeight: '600' as const },
 };
 
 export const Motion = {

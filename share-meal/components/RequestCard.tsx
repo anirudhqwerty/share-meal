@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Colors, Radius, Shadow, Spacing, Typography } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { LocationPreviewMap } from '@/components/LocationPreviewMap';
 import { formatDateTime } from '@/utils/time';
+import { PickupActions, Pickup } from '@/components/PickupActions';
 
 interface Request {
   id: string;
@@ -15,6 +15,7 @@ interface Request {
   ngo_id?: string;
   ngos?: { ngo_name: string; address: string; latitude?: number; longitude?: number };
   food_donations?: { food_type: string; quantity: string; organization_name?: string };
+  pickups?: Pickup | Pickup[] | null;
 }
 
 interface RequestCardProps {
@@ -22,23 +23,26 @@ interface RequestCardProps {
   mode: 'donor' | 'ngo'; // donor sees approve/reject, ngo sees status
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
+  loadingRequestId?: string | null;
   onPress?: () => void;
+  canReview?: boolean;
+  onChange?: () => Promise<void>;
 }
 
-export function RequestCard({ request, mode, onApprove, onReject, onPress }: RequestCardProps) {
+export function RequestCard({ request, mode, onApprove, onReject, loadingRequestId, onPress, canReview = true, onChange }: RequestCardProps) {
   const [showMap, setShowMap] = useState(false);
   const ngoName = request.ngos?.ngo_name || 'Unknown NGO';
   const ngoAddress = request.ngos?.address || '';
   const foodType = request.food_donations?.food_type || '';
   const quantity = request.food_donations?.quantity || '';
   const time = formatDateTime(request.request_time);
+  const pickup = Array.isArray(request.pickups) ? request.pickups[0] : request.pickups;
 
   return (
-    <Animated.View entering={FadeInDown.duration(260)}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.95} style={[styles.card, Shadow.sm]}>
-        <View style={styles.header}>
+      <View style={styles.card}>
+        <TouchableOpacity disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} style={styles.header}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{ngoName[0]?.toUpperCase() || 'N'}</Text>
+            <Ionicons name={mode === 'ngo' ? 'restaurant-outline' : 'people-outline'} size={22} color={Colors.primary} />
           </View>
           <View style={styles.info}>
             <Text style={styles.name} numberOfLines={1}>
@@ -49,18 +53,20 @@ export function RequestCard({ request, mode, onApprove, onReject, onPress }: Req
             </Text>
           </View>
           <Badge status={request.status as any} size="sm" />
-        </View>
+        </TouchableOpacity>
         <View style={styles.timeRow}>
           <Ionicons name="time-outline" size={11} color={Colors.textMuted} />
           <Text style={styles.time}>Requested {time}</Text>
         </View>
 
-        {mode === 'donor' && request.status === 'pending' && (
+        {mode === 'donor' && canReview && request.status === 'pending' && (
           <View style={styles.actions}>
             <Button
               title="Approve"
               variant="primary"
               size="sm"
+              loading={loadingRequestId === request.id}
+              disabled={Boolean(loadingRequestId)}
               onPress={() => onApprove?.(request.id)}
               style={{ flex: 1 }}
             />
@@ -68,19 +74,22 @@ export function RequestCard({ request, mode, onApprove, onReject, onPress }: Req
               title="Reject"
               variant="outline"
               size="sm"
+              loading={loadingRequestId === request.id}
+              disabled={Boolean(loadingRequestId)}
               onPress={() => onReject?.(request.id)}
               style={{ flex: 1, borderColor: Colors.error }}
               textStyle={{ color: Colors.error }}
             />
           </View>
         )}
+        {pickup && onChange && <PickupActions pickup={pickup} onChange={onChange} />}
 
         {mode === 'donor' && typeof request.ngos?.latitude === 'number' && (
           <>
             <TouchableOpacity
               style={styles.toggleRow}
               onPress={() => setShowMap((s) => !s)}
-              activeOpacity={0.7}
+              activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={showMap ? 'Hide NGO location' : 'Show NGO location'} accessibilityState={{ expanded: showMap }}
             >
               <Ionicons
                 name={showMap ? 'chevron-up' : 'map-outline'}
@@ -101,8 +110,7 @@ export function RequestCard({ request, mode, onApprove, onReject, onPress }: Req
             )}
           </>
         )}
-      </TouchableOpacity>
-    </Animated.View>
+      </View>
   );
 }
 
@@ -130,7 +138,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginTop: 8, alignSelf: 'flex-start',
+    marginTop: 8, alignSelf: 'flex-start', minHeight: 48,
   },
   toggleText: { ...Typography.caption, color: Colors.primary, fontWeight: '600' },
   mapWrap: { marginTop: 8 },

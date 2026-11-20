@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import api from './api';
 
 export const donationsService = {
@@ -42,7 +42,7 @@ export const donationsService = {
    * uploads 0 bytes. We must read the file to bytes ourselves.
    */
   async uploadImage(uri: string): Promise<string> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await getSupabase().auth.getSession();
     const userId = session?.user.id;
     if (!userId) throw new Error('You must be signed in to upload images.');
 
@@ -64,7 +64,7 @@ export const donationsService = {
 
     const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-    const { error } = await supabase.storage
+    const { error } = await getSupabase().storage
       .from('food_images')
       .upload(fileName, arrayBuffer, {
         contentType,
@@ -74,7 +74,7 @@ export const donationsService = {
 
     if (error) throw new Error(`Image upload failed: ${error.message}`);
 
-    const { data: { publicUrl } } = supabase.storage.from('food_images').getPublicUrl(fileName);
+    const { data: { publicUrl } } = getSupabase().storage.from('food_images').getPublicUrl(fileName);
     if (!publicUrl) throw new Error('Could not resolve image URL after upload.');
     return publicUrl;
   },

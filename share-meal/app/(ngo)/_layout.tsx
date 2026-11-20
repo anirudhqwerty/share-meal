@@ -39,21 +39,22 @@ export default function NgoLayout() {
           { height: 64 + insets.bottom, paddingBottom: Math.max(8, insets.bottom) },
         ],
         tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: Colors.secondary,
         tabBarItemStyle: styles.tabItemWrap,
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="map" label="Map" focused={focused} /> }}
+        options={{ title: 'Map', tabBarAccessibilityLabel: 'Nearby food map', tabBarIcon: ({ focused }) => <TabIcon name="map" label="Map" focused={focused} /> }}
       />
       <Tabs.Screen
         name="listings"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="list" label="Browse" focused={focused} /> }}
+        options={{ title: 'Browse', tabBarAccessibilityLabel: 'Browse food', tabBarIcon: ({ focused }) => <TabIcon name="list" label="Browse" focused={focused} /> }}
       />
       <Tabs.Screen
         name="my-requests"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="receipt" label="Requests" focused={focused} /> }}
+        options={{ title: 'Requests', tabBarAccessibilityLabel: 'Pickup requests', tabBarIcon: ({ focused }) => <TabIcon name="receipt" label="Requests" focused={focused} /> }}
       />
       <Tabs.Screen name="listing/[id]" options={{ href: null }} />
     </Tabs>
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   tabLabel: {
-    fontSize: 10.5,
+    fontSize: 12,
     color: Colors.textMuted,
     marginTop: 2,
     textAlign: 'center',

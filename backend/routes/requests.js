@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabase } = require('../lib/supabase');
 const { deliverSafely } = require('../lib/push-notifications');
 const { isUuid, workflowError } = require('../lib/validation');
+const { expireDonations } = require('../lib/expiry');
 
 router.param('id', (req, res, next, id) => {
   if (!isUuid(id)) return res.status(400).json({ error: 'Invalid request ID' });
@@ -22,6 +23,7 @@ router.post('/', async (req, res) => {
 
 router.get('/mine', async (req, res) => {
   if (req.userRole !== 'ngo') return res.status(403).json({ error: 'NGOs only' });
+  await expireDonations();
   const { data, error } = await supabase.from('pickup_requests')
     .select('*, pickups(*), food_donations(food_type, quantity, address, expiry_time, status, image_path, latitude, longitude, donors(organization_name, address, latitude, longitude))')
     .eq('ngo_id', req.user.id).order('request_time', { ascending: false });

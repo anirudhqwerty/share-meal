@@ -18,7 +18,7 @@ const fakeSupabase = {
     };
     return query;
   },
-  async rpc(name, args) {
+  async rpc(name, args = {}) {
     calls.push({ name, args });
     if (args.p_id === '00000000-0000-0000-0000-000000000000') return { data: null, error: { code: 'P0002', message: 'Pickup not found' } };
     return { data: { request: { id }, success: true, pickup: { id, status: 'completed' } }, error: null };

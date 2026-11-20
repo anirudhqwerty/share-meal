@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, RefreshControl } from 'react-native';
+import { Alert } from '@/utils/alert';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { donationsService } from '@/services/donations.service';
 import { requestsService } from '@/services/requests.service';
@@ -11,24 +12,40 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Colors, Spacing, Radius, Shadow, Typography } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { LocationPreviewMap } from '@/components/LocationPreviewMap';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatTimeLeft, formatDate } from '@/utils/time';
+import { useAuth } from '@/context/AuthContext';
+import { PickupActions } from '@/components/PickupActions';
+import { StateMessage } from '@/components/ui/StateMessage';
+import { useNow } from '@/hooks/useNow';
 
 export default function NgoListingDetailScreen() {
+  useNow();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [data, setData] = useState<{ donation: any; requests: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [hasRequested, setHasRequested] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const requestInProgress = useRef(false);
 
   const load = useCallback(async () => {
-    const res = await donationsService.getById(id!);
-    setData(res);
-    setLoading(false);
-  }, [id]);
+    setError('');
+    try {
+      const res = await donationsService.getById(id!);
+      setData(res);
+      setHasRequested((res.requests || []).some((request: any) => request.ngo_id === user?.id));
+    } catch (loadError: any) {
+      setError(loadError.message || 'Could not load this listing.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [id, user?.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const handleRequest = async () => {
     Alert.alert(
@@ -38,16 +55,19 @@ export default function NgoListingDetailScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Request', onPress: async () => {
+            if (requestInProgress.current) return;
+            requestInProgress.current = true;
             setRequesting(true);
             try {
               await requestsService.create(id!);
               setHasRequested(true);
-              Alert.alert('✅ Requested!', 'The donor will review your request. You will be notified when approved.');
-              load();
+              Alert.alert('Request sent', 'The donor can now review your pickup request.');
+              await load();
             } catch (e: any) {
               Alert.alert('Error', e.message);
             } finally {
               setRequesting(false);
+              requestInProgress.current = false;
             }
           },
         },
@@ -55,19 +75,29 @@ export default function NgoListingDetailScreen() {
     );
   };
 
-  if (loading || !data) return <LoadingSpinner text="Loading listing…" />;
+  if (loading) return <LoadingSpinner text="Loading listing…" />;
+  if (!data) {
+    return <StateMessage title="Food listing" message={error || 'This listing could not be found.'} onRetry={() => { setLoading(true); void load(); }} />;
+  }
   const { donation } = data;
   const expiry = formatTimeLeft(donation.expiry_time);
-  const isAvailable = donation.status === 'available';
+  const isAvailable = ['available', 'pending'].includes(donation.status) && !expiry.expired;
+  const ownRequest = data.requests.find((request: any) => request.ngo_id === user?.id);
+  const pickup = Array.isArray(ownRequest?.pickups) ? ownRequest.pickups[0] : ownRequest?.pickups;
+  const requestMessage = pickup?.status === 'completed' ? 'Food collected.' : pickup?.status === 'cancelled' ? 'Your pickup was cancelled.'
+    : ownRequest?.status === 'approved' ? 'Pickup approved. Arrange collection before expiry.'
+    : ownRequest?.status === 'rejected' ? 'Your request was not selected.'
+    : !isAvailable ? 'This listing is no longer available.' : 'Request sent. Awaiting donor approval.';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={Colors.secondary} />}>
         {/* Top bar */}
         <ScreenHeader title="Food listing" showBack />
 
         {donation.image_path ? (
-          <Image source={{ uri: donation.image_path }} style={styles.heroImage} />
+          <Image accessibilityLabel={donation.food_type} source={{ uri: donation.image_path }} style={styles.heroImage} />
         ) : (
           <View style={styles.heroFallback}>
             <Ionicons name="nutrition-outline" size={64} color={Colors.primary} />
@@ -76,8 +106,8 @@ export default function NgoListingDetailScreen() {
 
         {/* Status row */}
         <View style={styles.statusRow}>
-          <Badge status={donation.status} />
-          {expiry.urgent && (
+          <Badge status={expiry.expired && ['available', 'pending'].includes(donation.status) ? 'expired' : donation.status} />
+          {expiry.urgent && !expiry.expired && (
             <View style={styles.urgentChip}>
               <Ionicons name="warning" size={13} color={Colors.error} />
               <Text style={styles.urgentText}>Expiring soon!</Text>
@@ -92,7 +122,7 @@ export default function NgoListingDetailScreen() {
           <View style={styles.donorIcon}><Ionicons name="business" size={22} color={Colors.primary} /></View>
           <View style={styles.donorInfo}>
             <Text style={styles.donorName}>{donation.donors?.organization_name}</Text>
-            <Text style={styles.donorAddress} numberOfLines={2}>{donation.donors?.address}</Text>
+            <Text style={styles.donorAddress}>{donation.address || donation.donors?.address}</Text>
           </View>
         </View>
         <LocationPreviewMap
@@ -105,7 +135,6 @@ export default function NgoListingDetailScreen() {
         <View style={styles.detailsGrid}>
           {[
             { icon: 'layers-outline', label: 'Quantity', val: donation.quantity },
-            { icon: 'navigate-outline', label: 'Distance', val: typeof donation.distance_km === 'number' ? `${donation.distance_km.toFixed(1)} km` : 'N/A' },
             { icon: 'time-outline', label: 'Time left', val: expiry.text, urgent: expiry.urgent },
             { icon: 'calendar-outline', label: 'Posted', val: formatDate(donation.created_at, { day: '2-digit', month: 'short' }) },
           ].map((item) => (
@@ -116,15 +145,17 @@ export default function NgoListingDetailScreen() {
             </View>
           ))}
         </View>
+        {pickup && <PickupActions pickup={pickup} onChange={load} />}
+        {error ? <Text accessibilityRole="alert" style={styles.errorMessage}>{error}</Text> : null}
       </ScrollView>
 
       {/* CTA Footer */}
-      <View style={[styles.footer, Shadow.md, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom) }]}>
         {hasRequested || !isAvailable ? (
           <View style={styles.alreadyReq}>
-            <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+            <Ionicons name={hasRequested ? 'receipt-outline' : 'information-circle-outline'} size={22} color={Colors.secondary} />
             <Text style={styles.alreadyText}>
-              {hasRequested ? 'Request sent! Awaiting donor approval.' : `This food is ${donation.status}.`}
+              {hasRequested ? requestMessage : 'This listing is no longer available.'}
             </Text>
           </View>
         ) : (
@@ -143,7 +174,9 @@ export default function NgoListingDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
-  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
+  errorScreen: { justifyContent: 'center', paddingHorizontal: Spacing.lg, gap: Spacing.md },
+  errorMessage: { ...Typography.body, color: Colors.error, textAlign: 'center' },
+  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 24, maxWidth: 760, width: '100%', alignSelf: 'center' },
   heroImage: { width: '100%', height: 220, borderRadius: Radius.xl, marginBottom: Spacing.md },
   heroFallback: { height: 180, backgroundColor: Colors.primaryLight, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
@@ -155,11 +188,11 @@ const styles = StyleSheet.create({
   donorInfo: { flex: 1 },
   donorName: { ...Typography.h4, color: Colors.text },
   donorAddress: { ...Typography.caption, color: Colors.textSecondary, marginTop: 3 },
-  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  detailCard: { width: '47%', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: Spacing.md, gap: 6, borderWidth: 1, borderColor: Colors.border },
+  detailsGrid: { gap: 0 },
+  detailCard: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', paddingVertical: 16, gap: 12, borderBottomWidth: 1, borderColor: Colors.border },
   detailLabel: { ...Typography.caption, color: Colors.textMuted },
-  detailVal: { ...Typography.h4, color: Colors.text, fontSize: 15 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.white, padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border },
+  detailVal: { ...Typography.h4, color: Colors.text, fontSize: 15, flex: 1, textAlign: 'right' },
+  footer: { backgroundColor: Colors.white, padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border },
   alreadyReq: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'center' },
   alreadyText: { ...Typography.body, color: Colors.textSecondary, flex: 1 },
 });

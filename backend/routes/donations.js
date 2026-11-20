@@ -3,6 +3,7 @@ const router = express.Router();
 const { supabase } = require('../lib/supabase');
 const { deliverSafely } = require('../lib/push-notifications');
 const { isCoordinate, isText, isUuid, workflowError } = require('../lib/validation');
+const { expireDonations } = require('../lib/expiry');
 
 router.param('id', (req, res, next, id) => {
   if (!isUuid(id)) return res.status(400).json({ error: 'Invalid donation ID' });
@@ -22,7 +23,7 @@ router.post('/', async (req, res) => {
     !isCoordinate(latitude, 90) || !isCoordinate(longitude, 180) ||
     (address != null && (typeof address !== 'string' || address.length > 2000)) ||
     (image_path && (typeof image_path !== 'string' || image_path.length > 2048 || !/^https?:\/\//i.test(image_path))) ||
-    !expiry_time || !Number.isFinite(expiryDate.getTime()) || expiryDate <= new Date()
+    typeof expiry_time !== 'string' || !expiry_time || !Number.isFinite(expiryDate.getTime()) || expiryDate <= new Date()
   ) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -41,6 +42,7 @@ router.post('/', async (req, res) => {
 
 // GET /api/donations — donor: own donations | NGO: nearby available
 router.get('/', async (req, res) => {
+  await expireDonations();
   if (req.userRole === 'donor') {
     const { data, error } = await supabase
       .from('food_donations')
@@ -80,6 +82,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/donations/:id — full details + pickup requests
 router.get('/:id', async (req, res) => {
+  await expireDonations();
   if (!['donor', 'ngo'].includes(req.userRole)) {
     return res.status(403).json({ error: 'A donor or NGO profile is required' });
   }

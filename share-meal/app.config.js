@@ -1,6 +1,7 @@
 const appJson = require('./app.json');
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID || appJson.expo.extra?.eas?.projectId;
 
 module.exports = () => {
   const config = appJson.expo;
@@ -27,6 +28,7 @@ module.exports = () => {
     extra: {
       ...(config.extra || {}),
       GOOGLE_MAPS_API_KEY_SET: Boolean(GOOGLE_MAPS_API_KEY),
+      ...(EAS_PROJECT_ID ? { eas: { ...(config.extra?.eas || {}), projectId: EAS_PROJECT_ID } } : {}),
     },
   };
 };

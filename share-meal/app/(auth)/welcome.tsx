@@ -1,165 +1,55 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, StatusBar as RNStatusBar, Platform } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Radius, Shadow, Typography } from '@/constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import * as Haptics from 'expo-haptics';
-
-const { height } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-
-  const statusBarPad = Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : insets.top;
-
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
-      {/* Hero — full-bleed gradient extending behind status bar */}
-      <LinearGradient
-        colors={['#FF6B35', '#FF8B5B']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.hero, { paddingTop: statusBarPad + 24 }]}
-      >
-        <View style={styles.heroContent}>
-          <BrandLogo size={76} variant="onDark" />
-          <Text style={styles.appName}>Share Meal</Text>
-          <Text style={styles.tagline}>
-            Turning surplus food into{'\n'}someone's next meal
-          </Text>
-          <View style={styles.statRow}>
-            {[['10K+', 'Meals'], ['200+', 'NGOs'], ['50+', 'Cities']].map(([val, lbl]) => (
-              <View key={lbl} style={styles.statItem}>
-                <Text style={styles.statValue}>{val}</Text>
-                <Text style={styles.statLabel}>{lbl}</Text>
-              </View>
-            ))}
-          </View>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.intro}>
+          <BrandLogo size={64} variant="plain" />
+          <Text style={styles.name}>Share Meal</Text>
+          <Text style={styles.title}>Good food.{ '\n' }Another meal.</Text>
+          <Text style={styles.description}>Connect surplus food with organizations that can share it.</Text>
         </View>
-      </LinearGradient>
-
-      {/* CTA section — safe area applied only here */}
-      <SafeAreaView style={styles.cta} edges={['bottom', 'left', 'right']}>
-        <Text style={styles.ctaTitle}>Join the movement</Text>
-        <Text style={styles.ctaSubtitle}>Select your role to get started</Text>
-
-        <Animated.View entering={FadeInDown.delay(80).duration(350)}>
-          <TouchableOpacity
-            style={[styles.roleCard, Shadow.md]}
-            activeOpacity={0.9}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push({ pathname: '/(auth)/login', params: { role: 'donor' } });
-            }}
-          >
-            <View style={[styles.roleIcon, { backgroundColor: Colors.primaryLight }]}>
-              <Ionicons name="restaurant" size={24} color={Colors.primary} />
-            </View>
-            <View style={styles.roleText}>
-              <Text style={styles.roleName}>I'm a Donor</Text>
-              <Text style={styles.roleDesc}>Hotels, restaurants & individuals with surplus food</Text>
-            </View>
-            <View style={styles.chevronWrapper}>
-              <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(150).duration(350)}>
-          <TouchableOpacity
-            style={[styles.roleCard, Shadow.md]}
-            activeOpacity={0.9}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push({ pathname: '/(auth)/login', params: { role: 'ngo' } });
-            }}
-          >
-            <View style={[styles.roleIcon, { backgroundColor: Colors.secondaryLight }]}>
-              <Ionicons name="people" size={24} color={Colors.secondary} />
-            </View>
-            <View style={styles.roleText}>
-              <Text style={styles.roleName}>I'm an NGO</Text>
-              <Text style={styles.roleDesc}>Organizations that distribute food to those in need</Text>
-            </View>
-            <View style={styles.chevronWrapper}>
-              <Ionicons name="chevron-forward" size={18} color={Colors.secondary} />
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Text style={styles.terms}>
-          By continuing you agree to our Terms of Service & Privacy Policy
-        </Text>
-      </SafeAreaView>
-    </View>
+        <View style={styles.choices}>
+          <Text style={styles.heading}>How will you help?</Text>
+          {([
+            { role: 'donor', title: 'Share food', description: 'Post surplus food for nearby NGOs to collect.', icon: 'restaurant-outline', color: Colors.primary },
+            { role: 'ngo', title: 'Collect food', description: 'Find food nearby and arrange a pickup for your NGO.', icon: 'people-outline', color: Colors.secondary },
+          ] as const).map((item) => (
+            <Pressable key={item.role} accessibilityRole="button" accessibilityLabel={item.title}
+              onPress={() => router.push({ pathname: '/(auth)/login', params: { role: item.role } })}
+              style={({ pressed }) => [styles.choice, pressed && { backgroundColor: Colors.surface, borderColor: item.color }]}>
+              <Ionicons name={item.icon} size={24} color={item.color} />
+              <View style={styles.choiceText}>
+                <Text style={styles.choiceTitle}>{item.title}</Text>
+                <Text style={styles.choiceDescription}>{item.description}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.white },
-  hero: {
-    height: height * 0.46,
-    justifyContent: 'flex-end',
-    paddingBottom: 32,
-    paddingHorizontal: Spacing.xl,
-  },
-  heroContent: { alignItems: 'center', gap: 2 },
-  appName: {
-    fontSize: 34, fontWeight: '800', color: Colors.white,
-    letterSpacing: -1, marginTop: 14,
-  },
-  tagline: {
-    fontSize: 15, color: 'rgba(255,255,255,0.88)',
-    textAlign: 'center', marginTop: 6, lineHeight: 22,
-  },
-  statRow: { flexDirection: 'row', gap: Spacing.xl, marginTop: 22 },
-  statItem: { alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '800', color: Colors.white },
-  statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 2, fontWeight: '500' },
-
-  cta: {
-    flex: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-  },
-  ctaTitle: { ...Typography.h2, color: Colors.text, marginBottom: 4 },
-  ctaSubtitle: { ...Typography.body, color: Colors.textSecondary, marginBottom: Spacing.lg },
-  roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: Spacing.md,
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 14,
-  },
-  roleIcon: {
-    width: 52, height: 52, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  roleText: { flex: 1 },
-  roleName: { ...Typography.h4, color: Colors.text, marginBottom: 2 },
-  roleDesc: { ...Typography.caption, color: Colors.textSecondary, lineHeight: 17 },
-  chevronWrapper: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: Colors.surface,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  terms: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-    lineHeight: 17,
-  },
+  safe: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flexGrow: 1, padding: Spacing.lg, justifyContent: 'center', gap: 40, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  intro: { alignItems: 'flex-start', gap: 14 },
+  name: { ...Typography.h4, color: Colors.primary },
+  title: { fontSize: 36, lineHeight: 42, fontWeight: '700', letterSpacing: -0.8, color: Colors.text },
+  description: { ...Typography.bodyLg, color: Colors.textSecondary, maxWidth: 360 },
+  choices: { gap: 12 }, heading: { ...Typography.h3, color: Colors.text, marginBottom: 4 },
+  choice: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.card },
+  choiceText: { flex: 1, minWidth: 0, gap: 4 }, choiceTitle: { ...Typography.h4, color: Colors.text },
+  choiceDescription: { ...Typography.body, color: Colors.textSecondary },
 });

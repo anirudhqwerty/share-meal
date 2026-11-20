@@ -1,21 +1,20 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { requestsService } from '@/services/requests.service';
 import { RequestCard } from '@/components/RequestCard';
 import { RequestCardSkeletonList } from '@/components/skeletons/RequestCardSkeleton';
-import { Colors, Spacing, Radius, Typography, Shadow } from '@/constants/theme';
+import { Colors, Spacing, Radius, Typography } from '@/constants/theme';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const FILTERS = ['all', 'pending', 'approved', 'rejected'] as const;
 type Filter = typeof FILTERS[number];
 
 const FILTER_META: Record<Filter, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
   all:      { icon: 'list-outline',           color: Colors.text,       bg: Colors.surface },
-  pending:  { icon: 'time-outline',            color: '#D97706',         bg: '#FEF3C7' },
+  pending:  { icon: 'time-outline',            color: Colors.warning,    bg: Colors.warningBg },
   approved: { icon: 'checkmark-circle-outline', color: Colors.success,   bg: Colors.successBg },
   rejected: { icon: 'close-circle-outline',    color: Colors.error,      bg: Colors.errorBg },
 };
@@ -42,7 +41,7 @@ export default function NgoMyRequestsScreen() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const filtered = filter === 'all' ? requests : requests.filter((r) => r.status === filter);
   const counts = FILTERS.reduce((acc, f) => {
@@ -53,32 +52,9 @@ export default function NgoMyRequestsScreen() {
   const header = (
     <View style={styles.header}>
       <ScreenHeader title="Your requests" />
-      <Text style={styles.subtitle}>
+      {!loading && <Text style={styles.subtitle}>
         {requests.length} total pickup request{requests.length !== 1 ? 's' : ''}
-      </Text>
-
-      {/* Summary cards row */}
-      {!loading && requests.length > 0 && (
-        <View style={styles.summaryRow}>
-          {(['pending', 'approved', 'rejected'] as const).map((f) => {
-            const meta = FILTER_META[f];
-            return (
-              <TouchableOpacity
-                key={f}
-                style={[styles.summaryCard, { backgroundColor: meta.bg }, filter === f && styles.summaryCardActive]}
-                onPress={() => setFilter(f)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={meta.icon} size={18} color={meta.color} />
-                <Text style={[styles.summaryNum, { color: meta.color }]}>{counts[f]}</Text>
-                <Text style={[styles.summaryLbl, { color: meta.color }]}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
+      </Text>}
 
       {/* Filter pills */}
       <View style={styles.filterRow}>
@@ -148,18 +124,17 @@ export default function NgoMyRequestsScreen() {
               tintColor={Colors.secondary}
             />
           }
-          renderItem={({ item, index }) => (
-            <Animated.View entering={FadeInDown.delay(index * 50).duration(260)}>
+              renderItem={({ item }) => (
               <RequestCard
                 request={item}
                 mode="ngo"
+                onChange={load}
                 onPress={() =>
                   router.push({ pathname: '/(ngo)/listing/[id]', params: { id: item.donation_id } })
                 }
               />
-            </Animated.View>
           )}
-          ListEmptyComponent={
+          ListEmptyComponent={!error ?
             <View style={styles.empty}>
               <View style={[
                 styles.emptyIconWrap,
@@ -184,7 +159,7 @@ export default function NgoMyRequestsScreen() {
                   <Text style={styles.resetBtnText}>Show all requests</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </View> : null
           }
         />
       )}
@@ -194,7 +169,7 @@ export default function NgoMyRequestsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
+  list: { paddingHorizontal: Spacing.lg, paddingBottom: 32, maxWidth: 760, width: '100%', alignSelf: 'center' },
   loadingWrap: { paddingHorizontal: Spacing.lg, paddingBottom: 120 },
   header: { paddingTop: Spacing.md, marginBottom: Spacing.md },
   subtitle: { ...Typography.caption, color: Colors.textSecondary, marginTop: 4, marginBottom: 14 },
@@ -212,7 +187,7 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
   filterChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 11, paddingVertical: 7,
+    paddingHorizontal: 12, paddingVertical: 10, minHeight: 48,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface,
     borderWidth: 1, borderColor: Colors.border,

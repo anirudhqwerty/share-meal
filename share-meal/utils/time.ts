@@ -49,7 +49,7 @@ export function formatTimeLeft(expiry: string | Date | null | undefined): {
   if (diff <= 0) return { text: 'Expired', expired: true, urgent: true };
   const h = Math.floor(diff / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
-  const text = h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+  const text = h > 0 ? `${h}h ${m}m left` : m === 0 ? 'Less than a minute left' : `${m}m left`;
   return { text, expired: false, urgent: diff < 3_600_000 };
 }
 

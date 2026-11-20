@@ -58,7 +58,9 @@ router.post('/register', authenticateToken, async (req, res) => {
 
     const { error: registrationError } = await supabase.rpc('register_food_profile', {
       p_user_id: userId, p_email: email, p_role: role, p_phone: phone || null,
-      p_profile: { ...organizationData, latitude: lat, longitude: lng },
+      p_profile: { ...organizationData, latitude: lat, longitude: lng,
+        ...(role === 'ngo' ? { notification_radius_km: organizationData.notification_radius_km === undefined ? 5 : Number(organizationData.notification_radius_km) } : {}),
+      },
     });
     if (registrationError) return workflowError(res, registrationError);
 

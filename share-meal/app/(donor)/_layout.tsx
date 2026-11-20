@@ -39,21 +39,22 @@ export default function DonorLayout() {
           { height: 64 + insets.bottom, paddingBottom: Math.max(8, insets.bottom) },
         ],
         tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: Colors.primary,
         tabBarItemStyle: styles.tabItemWrap,
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="home" label="Home" focused={focused} /> }}
+        options={{ title: 'Home', tabBarAccessibilityLabel: 'Home', tabBarIcon: ({ focused }) => <TabIcon name="home" label="Home" focused={focused} /> }}
       />
       <Tabs.Screen
         name="new-donation"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="add-circle" label="Post" focused={focused} /> }}
+        options={{ title: 'Post donation', tabBarAccessibilityLabel: 'Post donation', tabBarIcon: ({ focused }) => <TabIcon name="add-circle" label="Post" focused={focused} /> }}
       />
       <Tabs.Screen
         name="history"
-        options={{ tabBarIcon: ({ focused }) => <TabIcon name="stats-chart" label="History" focused={focused} /> }}
+        options={{ title: 'History', tabBarAccessibilityLabel: 'Donation history', tabBarIcon: ({ focused }) => <TabIcon name="stats-chart" label="History" focused={focused} /> }}
       />
       <Tabs.Screen name="donation/[id]" options={{ href: null }} />
     </Tabs>
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   tabLabel: {
-    fontSize: 10.5,
+    fontSize: 12,
     color: Colors.textMuted,
     marginTop: 2,
     textAlign: 'center',

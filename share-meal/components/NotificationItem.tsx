@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatDateTime } from '@/utils/time';
 
@@ -17,8 +16,8 @@ export function NotificationItem({ item, onPress }: { item: Notification; onPres
   const time = formatDateTime(item.created_at);
 
   return (
-    <Animated.View entering={FadeInDown.duration(240)}>
     <TouchableOpacity
+      accessibilityRole="button" accessibilityLabel={`${item.is_read ? '' : 'Unread: '}${item.title}. ${item.message}`}
       onPress={onPress}
       activeOpacity={0.85}
       style={[styles.item, !item.is_read && styles.unread]}
@@ -28,19 +27,18 @@ export function NotificationItem({ item, onPress }: { item: Notification; onPres
       </View>
       <View style={styles.content}>
         <Text style={[styles.title, !item.is_read && styles.titleBold]}>{item.title}</Text>
-        <Text style={styles.message} numberOfLines={2}>{item.message}</Text>
+        <Text style={styles.message}>{item.message}</Text>
         <Text style={styles.time}>{time}</Text>
       </View>
       {!item.is_read && <View style={styles.dot} />}
     </TouchableOpacity>
-    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   item: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
+    backgroundColor: Colors.card, borderRadius: Radius.md,
     padding: Spacing.md, marginBottom: Spacing.sm,
     borderWidth: 1, borderColor: Colors.border,
   },
@@ -53,7 +51,7 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   title: { ...Typography.h4, color: Colors.text, fontSize: 14 },
   titleBold: { fontWeight: '700' },
-  message: { ...Typography.caption, color: Colors.textSecondary, marginTop: 3, lineHeight: 17 },
+  message: { ...Typography.body, color: Colors.textSecondary, marginTop: 4 },
   time: { ...Typography.caption, color: Colors.textMuted, marginTop: 5 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary, marginTop: 6 },
 });

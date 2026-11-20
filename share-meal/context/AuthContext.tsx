@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
+import { Platform, AppState } from 'react-native';
+import Constants from 'expo-constants';
+import { getSupabase } from '@/lib/supabase';
 import { authService } from '@/services/auth.service';
+import { getNativeNotifications, supportsNativePush } from '@/lib/notifications';
 
 type UserRole = 'donor' | 'ngo' | null;
 
@@ -29,6 +32,7 @@ interface AuthContextType {
   role: UserRole;
   isLoading: boolean;
   isHydrated: boolean;
+  authError: string | null;
   isRegistered: boolean;
   refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -40,6 +44,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   isLoading: true,
   isHydrated: false,
+  authError: null,
   isRegistered: false,
   refreshUser: async () => {},
   signOut: async () => {},
@@ -84,8 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
-  const hasHydratedRef = useRef(false);
+  const loadVersion = useRef(0);
 
   const hydrateFromCache = useCallback(async () => {
     try {
@@ -95,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const cachedProfile = map[CACHE_KEYS.profile] ? JSON.parse(map[CACHE_KEYS.profile] as string) : null;
       const cachedRole = (map[CACHE_KEYS.role] || null) as UserRole;
       const cachedRegistered = map[CACHE_KEYS.isRegistered] === '1';
+      const { data: { session } } = await getSupabase().auth.getSession();
+      if (!session || cachedUser?.id !== session.user.id || !['donor', 'ngo'].includes(cachedRole || '')) return;
       if (cachedUser) setUser(cachedUser);
       if (cachedProfile) setProfile(cachedProfile);
       if (cachedRole) setRole(cachedRole);
@@ -102,14 +110,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore
     } finally {
-      hasHydratedRef.current = true;
       setIsHydrated(true);
     }
   }, []);
 
   const loadUser = useCallback(async () => {
+    const version = ++loadVersion.current;
+    setIsLoading(true);
+    setAuthError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await getSupabase().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (version !== loadVersion.current) return;
       if (!session) {
         setUser(null);
         setProfile(null);
@@ -119,24 +131,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      let appUser: AuthUser | undefined;
+      let appProfile: Profile | null = null;
       try {
-        const { user: appUser, profile: appProfile } = await authService.getMe();
+        ({ user: appUser, profile: appProfile } = await authService.getMe());
+      } catch (error) {
+        // A 404 is the backend's explicit "profile not created" response.
+        // Network errors and server errors must not send registered users back to registration.
+        if ((error as { status?: number })?.status !== 404) throw error;
+      }
+
+      if (version !== loadVersion.current) return;
+      if (appUser) {
+        const registrationComplete = Boolean(appUser.role && appProfile);
         setUser(appUser);
         setProfile(appProfile);
         setRole(appUser.role);
-        setIsRegistered(Boolean(appUser.role));
-        await writeCache({ user: appUser, profile: appProfile, role: appUser.role, isRegistered: Boolean(appUser.role) });
-      } catch {
-        // Supabase session exists but app_users row doesn't — user hasn't finished registration
-        const sessionUser: AuthUser = { id: session.user.id, email: session.user.email!, role: null };
+        setIsRegistered(registrationComplete);
+        await writeCache({ user: appUser, profile: appProfile, role: appUser.role, isRegistered: registrationComplete });
+      } else {
+        // Supabase session exists but app_users row doesn't — user hasn't finished registration.
+        const preferredRole = session.user.user_metadata?.preferred_role;
+        const pendingRole = preferredRole === 'donor' || preferredRole === 'ngo' ? preferredRole : null;
+        const sessionUser: AuthUser = { id: session.user.id, email: session.user.email || '', role: pendingRole };
         setUser(sessionUser);
         setProfile(null);
-        setRole(null);
+        setRole(pendingRole);
         setIsRegistered(false);
         await writeCache({ user: sessionUser, profile: null, role: null, isRegistered: false });
       }
+    } catch (error) {
+      if (version !== loadVersion.current) return;
+      setAuthError(error instanceof Error ? error.message : 'Could not load your account. Check your connection and try again.');
     } finally {
-      setIsLoading(false);
+      if (version === loadVersion.current) setIsLoading(false);
     }
   }, []);
 
@@ -146,10 +174,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await loadUser();
     })();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = getSupabase().auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
       if (session) {
-        loadUser();
+        // Supabase warns against awaiting more Supabase work inside this callback.
+        setTimeout(() => { void loadUser(); }, 0);
       } else {
+        ++loadVersion.current;
+        setAuthError(null);
         setUser(null);
         setProfile(null);
         setRole(null);
@@ -158,11 +190,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCache();
       }
     });
-    return () => listener.subscription.unsubscribe();
+    return () => { ++loadVersion.current; listener.subscription.unsubscribe(); };
   }, [hydrateFromCache, loadUser]);
 
+  useEffect(() => {
+    if (!user?.id || !isRegistered || !supportsNativePush) return;
+    let active = true;
+    let tokenListener: { remove: () => void } | undefined;
+    let registering = false;
+    const expectedUserId = user.id;
+
+    const registerPushToken = async () => {
+      if (registering || !active) return;
+      registering = true;
+      try {
+        const Notifications = await getNativeNotifications();
+        if (!Notifications || !active) return;
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        if (!projectId) { if (__DEV__) console.warn('Push registration needs an EAS project ID.'); return; }
+
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('share-meal', {
+            name: 'Share-Meal updates',
+            importance: Notifications.AndroidImportance.DEFAULT,
+          });
+        }
+
+        let { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          ({ status } = await Notifications.requestPermissionsAsync());
+        }
+        if (status !== 'granted' || !active) {
+          if (active) await authService.updatePushToken(null);
+          return;
+        }
+
+        const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+        const { data: { session } } = await getSupabase().auth.getSession();
+        if (active && session?.user.id === expectedUserId) await authService.updatePushToken(token);
+        if (!tokenListener && active) tokenListener = Notifications.addPushTokenListener(() => { void registerPushToken(); });
+      } catch (error) {
+        console.warn('Could not register for push notifications:', error instanceof Error ? error.message : error);
+      } finally { registering = false; }
+    };
+
+    void registerPushToken();
+    const appListener = AppState.addEventListener('change', (state) => { if (state === 'active') void registerPushToken(); });
+
+    return () => {
+      active = false;
+      tokenListener?.remove();
+      appListener.remove();
+    };
+  }, [user?.id, isRegistered]);
+
   const signOut = useCallback(async () => {
+    try {
+      await authService.updatePushToken(null);
+    } catch {
+      // Signing out must still work if the API is unavailable.
+    }
     await authService.signOut();
+    setAuthError(null);
     setUser(null);
     setProfile(null);
     setRole(null);
@@ -178,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
         isLoading,
         isHydrated,
+        authError,
         isRegistered,
         refreshUser: loadUser,
         signOut,

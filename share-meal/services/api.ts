@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { API_BASE_URL } from '@/constants/config';
 
 const api = axios.create({
@@ -10,7 +10,7 @@ const api = axios.create({
 
 // Attach Supabase JWT on every request
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await getSupabase().auth.getSession();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
@@ -25,7 +25,11 @@ api.interceptors.response.use(
       typeof rawError === 'string'
         ? rawError
         : rawError?.message || err.message || 'Network error';
-    return Promise.reject(new Error(msg));
+    const apiError = new Error(msg) as Error & { status?: number; code?: string };
+    apiError.name = 'ApiError';
+    apiError.status = err.response?.status;
+    apiError.code = err.code;
+    return Promise.reject(apiError);
   }
 );
 

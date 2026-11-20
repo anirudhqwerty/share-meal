@@ -1,15 +1,15 @@
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import api from './api';
 
 export const authService = {
-  async signUpWithPassword(email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+  async signUpWithPassword(email: string, password: string, role: 'donor' | 'ngo') {
+    const { data, error } = await getSupabase().auth.signUp({ email, password, options: { data: { preferred_role: role } } });
     if (error) throw new Error(error.message);
     return data;
   },
 
   async signInWithPassword(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await getSupabase().auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
     return data;
   },
@@ -29,11 +29,17 @@ export const authService = {
     return res.data;
   },
 
-  async signOut() {
-    await supabase.auth.signOut();
+  async updateRadius(notification_radius_km: number) {
+    const res = await api.patch('/api/auth/preferences', { notification_radius_km });
+    return res.data.profile;
   },
 
-  async updatePushToken(expo_push_token: string) {
+  async signOut() {
+    const { error } = await getSupabase().auth.signOut({ scope: 'local' });
+    if (error) throw error;
+  },
+
+  async updatePushToken(expo_push_token: string | null) {
     await api.patch('/api/auth/push-token', { expo_push_token });
   },
 };

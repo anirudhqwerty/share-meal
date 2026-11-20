@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
+import { StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,6 +7,8 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  cancelAnimation,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Colors, Radius } from '@/constants/theme';
 
@@ -23,14 +25,17 @@ interface SkeletonProps {
  */
 export function Skeleton({ width = '100%', height = 14, radius = Radius.sm, style }: SkeletonProps) {
   const progress = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) { progress.value = 1; return; }
     progress.value = withRepeat(
       withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
       -1,
       true,
     );
-  }, [progress]);
+    return () => cancelAnimation(progress);
+  }, [progress, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0.55, 1]),

@@ -16,13 +16,13 @@ export function ScreenHeader({ title, showBack = false }: ScreenHeaderProps) {
   return (
     <View style={styles.row}>
       {showBack ? (
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color={Colors.text} />
         </TouchableOpacity>
       ) : (
         <BrandLogo size={36} variant="plain" />
       )}
-      <Text style={styles.title}>{title}</Text>
+      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
       <View style={styles.spacer} />
     </View>
   );
@@ -36,8 +36,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.mdSm,
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 48,
+    height: 48,
     borderRadius: Radius.md,
     backgroundColor: Colors.surface,
     alignItems: 'center',
@@ -45,6 +45,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  title: { ...Typography.h3, color: Colors.text, flex: 1, textAlign: 'center' },
-  spacer: { width: 38, height: 38 },
+  title: { ...Typography.h3, color: Colors.text, flex: 1, textAlign: 'left', marginLeft: Spacing.mdSm },
+  spacer: { width: 8 },
 });

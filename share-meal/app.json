@@ -2,6 +2,7 @@
   "expo": {
     "name": "share-meal",
     "slug": "share-meal",
+    "owner": "anirudhqwerty1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/applogo.png",
@@ -9,6 +10,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.anirudh.sharemeal",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Share-Meal needs your location to find nearby food donations.",
@@ -16,11 +18,10 @@
         "NSCameraUsageDescription": "Share-Meal needs camera access to take photos of food donations.",
         "NSPhotoLibraryUsageDescription": "Share-Meal needs photo library access to attach food images."
       },
-      "config": {
-        "googleMapsApiKey": "YOUR_IOS_GOOGLE_MAPS_API_KEY"
-      }
+      "config": {}
     },
     "android": {
+      "package": "com.anirudh.sharemeal",
       "adaptiveIcon": {
         "backgroundColor": "#FF6B35",
         "foregroundImage": "./assets/images/applogo.png",
@@ -28,7 +29,7 @@
         "monochromeImage": "./assets/images/applogo.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
+      "predictiveBackGestureEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -36,11 +37,7 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
-        }
-      }
+      "config": {}
     },
     "web": {
       "output": "static",
@@ -48,6 +45,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#FF6B35",
+          "defaultChannel": "share-meal"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -72,6 +76,11 @@
         }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "d702782a-1011-45f5-b1f7-d46669f00bf8"
+      }
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
