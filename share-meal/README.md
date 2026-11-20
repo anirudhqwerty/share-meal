@@ -81,9 +81,13 @@ The app is linked to `@anirudhqwerty1/share-meal` in EAS. `eas.json` defines dev
 
 For Android Firebase setup:
 
-1. Register the Android app in Firebase with package `com.anirudh.sharemeal`.
-2. Put its `google-services.json` in this app folder, beside `app.json`. The dynamic config uses it automatically when present, and `.easignore` includes it in the EAS build upload while keeping it out of Git. `GOOGLE_SERVICES_JSON` (EAS file variable) or `GOOGLE_SERVICES_FILE` can override the path.
-3. Upload the Firebase service-account JSON for FCM v1 to the linked EAS project's Android push credentials using `eas credentials --platform android`. This private key is separate from `google-services.json`; do not put it in the mobile bundle or Git.
+1. Use Firebase project `share-meal-94527` (Share-Meal), with Android package `com.anirudh.sharemeal` and sender ID `1083020422501`. The Android app is registered and Firebase Cloud Messaging API v1 is enabled.
+2. Put its `google-services.json` in this app folder, beside `app.json`. The dynamic config uses it automatically when present. EAS reads `../.easignore` at the Git repository root: it uploads this app and its Firebase configuration, while excluding local environment files, private credentials, and the backend. The app's `.gitignore` keeps `google-services.json` out of Git. `GOOGLE_SERVICES_JSON` (EAS file variable) or `GOOGLE_SERVICES_FILE` can override the path.
+3. Give a dedicated service account only the Firebase Cloud Messaging API Admin role in this Firebase project, then upload its private JSON key to the linked EAS project's Android push credentials using `eas credentials --platform android`. This private key is separate from `google-services.json`; keep it outside the repository and never put it in the mobile bundle. Select Google Service Account, then Push Notifications (FCM V1), rather than Play Store submissions or legacy FCM.
 4. Build and install an Android development/preview app, allow notifications, and test a pickup update. No notification worker or cron is needed.
+
+The EAS preview environment contains the app's public Supabase settings and deployed API URL, `https://share-meal-six.vercel.app/`. Build an installable APK with `eas build --platform android --profile preview`. To inspect the upload, run `eas build:inspect --platform android --profile preview --stage archive --output <new-directory>` and check `<new-directory>/share-meal/google-services.json`; no `.env` or private key should be present.
+
+For device verification, sign in with a completed donor or NGO profile and allow notifications. Confirm that `/api/auth/push-token` succeeds without logging its token. Background the app, then request a real donation pickup to notify its donor, or approve a pickup to notify its NGO. Confirm receipt on the device and tap the notification to open the inbox. An Expo push ticket alone does not establish device receipt; check its push receipt for delivery errors as well.
 
 Run `npm run typecheck`, `npm run lint`, and `npx expo export --platform android --max-workers 2` or `--platform web` before release. Two workers avoid excessive memory use on machines with many CPU cores. SDK 54 still has upstream dependency audit findings; do not force an incompatible SDK upgrade through `npm audit fix --force`.
